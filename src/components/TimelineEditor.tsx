@@ -9,6 +9,18 @@ const CELL_H = 36;
 const EFFECT_CELL_H = 30;
 const LABEL_W = 210;
 
+function formatCellAmt(n: number): string {
+  const a = Math.abs(n);
+  if (a === 0) return '';
+  const sign = n < 0 ? '−' : '';
+  if (a >= 10_000) return `${sign}${Math.round(a / 1_000)}k`;
+  if (a >= 1_000) {
+    const k = a / 1_000;
+    return `${sign}${k % 1 === 0 ? k : k.toFixed(1).replace('.', ',')}k`;
+  }
+  return `${sign}${Math.round(a)}`;
+}
+
 type PaintTarget =
   | { kind: 'situation'; situationId: string }
   | { kind: 'effect'; situationId: string; effectId: string };
@@ -346,6 +358,20 @@ export function TimelineEditor() {
                         month >= sortMonths(paintAnchor, paintCurrent)[0] &&
                         month <= sortMonths(paintAnchor, paintCurrent)[1];
 
+                      // Net amount for this cell (respects one-time vs recurring and effect overrides)
+                      let cellNet = 0;
+                      if (active) {
+                        const hasEntryStart = scenario.entries.some(
+                          (e) => e.situationId === sit.id && e.startMonth === month,
+                        );
+                        for (const effect of sit.effects) {
+                          if (getEffectDisabledMonths(sit.id, effect.id).has(month)) continue;
+                          if (effect.type === 'one-time' && !hasEntryStart) continue;
+                          cellNet += effect.category === 'income' ? effect.amount : -effect.amount;
+                        }
+                      }
+                      const cellLabel = formatCellAmt(cellNet);
+
                       return (
                         <div
                           key={month}
@@ -362,6 +388,16 @@ export function TimelineEditor() {
                                 opacity: isPaintingThisCell && paintMode === 'remove' ? 0.25 : 0.75,
                               }}
                             />
+                          )}
+                          {active && cellLabel && !(isPaintingThisCell && paintMode === 'remove') && (
+                            <div className="absolute inset-y-1 inset-x-0.5 flex items-center justify-center pointer-events-none select-none">
+                              <span
+                                className="text-[9px] font-bold text-white leading-none"
+                                style={{ textShadow: '0 1px 2px rgba(0,0,0,0.55)' }}
+                              >
+                                {cellLabel}
+                              </span>
+                            </div>
                           )}
                           {!active && isPaintingThisCell && paintMode === 'add' && (
                             <div
@@ -461,6 +497,16 @@ export function TimelineEditor() {
                                       opacity: isPaintingThisCell && paintMode === 'remove' ? 0.2 : 0.55,
                                     }}
                                   />
+                                )}
+                                {situationIsActive && active && !(isPaintingThisCell && paintMode === 'remove') && (
+                                  <div className="absolute inset-y-1 inset-x-1 flex items-center justify-center pointer-events-none select-none">
+                                    <span
+                                      className="text-[9px] font-medium text-white leading-none"
+                                      style={{ textShadow: '0 1px 1px rgba(0,0,0,0.5)' }}
+                                    >
+                                      {formatCellAmt(effect.amount)}
+                                    </span>
+                                  </div>
                                 )}
                                 {situationIsActive && !active && isPaintingThisCell && paintMode === 'add' && (
                                   <div
