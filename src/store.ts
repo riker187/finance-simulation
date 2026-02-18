@@ -104,8 +104,25 @@ function activeMonthsFromEntries(entries: { startMonth: string; endMonth: string
   return set;
 }
 
-function toScenarioEntries(situationId: string, months: Set<string>): ScenarioEntry[] {
-  const ranges = monthsToRanges([...months]);
+function toScenarioEntries(
+  situationId: string,
+  months: Set<string>,
+  situation?: Situation,
+): ScenarioEntry[] {
+  const monthList = [...months].sort();
+  // One-time effects must not be merged into ranges: adjacent painted months would
+  // collapse into one entry and the simulation would only fire the effect on the
+  // first month of that range.  Keep every month as its own 1-month entry instead.
+  const hasOneTime = situation?.effects.some((e) => e.type === 'one-time') ?? false;
+  if (hasOneTime) {
+    return monthList.map((month) => ({
+      id: uid(),
+      situationId,
+      startMonth: month,
+      endMonth: month,
+    }));
+  }
+  const ranges = monthsToRanges(monthList);
   return ranges.map((range) => ({
     id: uid(),
     situationId,
@@ -461,7 +478,7 @@ export const useStore = create<AppState>()(
           }
 
           const otherSituationEntries = scenario.entries.filter((entry) => entry.situationId !== situationId);
-          const newSituationEntries = toScenarioEntries(situationId, situationActive);
+          const newSituationEntries = toScenarioEntries(situationId, situationActive, sit);
 
           const effectEntriesForOtherSituations = scenario.effectEntries.filter(
             (entry) => entry.situationId !== situationId,
