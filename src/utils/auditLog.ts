@@ -1,3 +1,5 @@
+import { uid } from './uid';
+
 export interface AuditEntry {
   id: string;
   timestamp: string; // ISO 8601
@@ -31,15 +33,15 @@ function save(entries: AuditEntry[]): void {
   }
 }
 
+// Never throws — logging must never block store actions
 export function logAuditEntry(label: string, detail?: string): void {
-  const entries = load();
-  entries.push({
-    id: crypto.randomUUID(),
-    timestamp: new Date().toISOString(),
-    label,
-    detail,
-  });
-  save(entries);
+  try {
+    const entries = load();
+    entries.push({ id: uid(), timestamp: new Date().toISOString(), label, detail });
+    save(entries);
+  } catch {
+    // silently ignore
+  }
 }
 
 export function getAuditEntries(): AuditEntry[] {
