@@ -4,6 +4,7 @@ import type { Situation, Scenario, ScenarioEntry, ScenarioEffectEntry } from './
 import { DEFAULT_SITUATION_CATEGORY } from './types';
 import { currentMonth, addMonths, monthsToRanges, rangeToMonths } from './utils/months';
 import { uid } from './utils/uid';
+import { logAuditEntry, logDebounced } from './utils/auditLog';
 
 function normalizeSituation(s: Situation): Situation {
   const category = typeof s.category === 'string' ? s.category.trim() : '';
@@ -289,8 +290,10 @@ export const useStore = create<AppState>()(
       activeScenarioId: sample.scenarios[0].id,
       compareMode: false,
 
-      addSituation: (s) =>
-        set((state) => ({ situations: [...state.situations, normalizeSituation(s)] })),
+      addSituation: (s) => {
+        logAuditEntry(`Situation "${s.name}" hinzugefügt`);
+        set((state) => ({ situations: [...state.situations, normalizeSituation(s)] }));
+      },
       duplicateSituation: (id) =>
         set((state) => {
           const index = state.situations.findIndex((s) => s.id === id);
@@ -304,16 +307,35 @@ export const useStore = create<AppState>()(
             effects: source.effects.map((effect) => ({ ...effect, id: uid() })),
           });
 
+          logAuditEntry(`Situation "${source.name}" dupliziert`, `Kopie: "${duplicate.name}"`);
           const situations = [...state.situations];
           situations.splice(index + 1, 0, duplicate);
           return { situations };
         }),
       updateSituation: (id, updates) =>
-        set((state) => ({
-          situations: state.situations.map((s) =>
-            s.id === id ? normalizeSituation({ ...s, ...updates } as Situation) : s,
-          ),
-        })),
+        set((state) => {
+          const old = state.situations.find((s) => s.id === id);
+          if (old) {
+            const changed: string[] = [];
+            if (updates.name !== undefined && updates.name !== old.name)
+              changed.push(`Name: "${old.name}" → "${updates.name}"`);
+            if (updates.category !== undefined && updates.category !== old.category)
+              changed.push('Kategorie geändert');
+            if (updates.description !== undefined && updates.description !== old.description)
+              changed.push('Beschreibung geändert');
+            if (updates.effects !== undefined && updates.effects !== old.effects)
+              changed.push('Effekte geändert');
+            if (updates.color !== undefined && updates.color !== old.color)
+              changed.push('Farbe geändert');
+            if (changed.length > 0)
+              logAuditEntry(`Situation "${updates.name ?? old.name}" bearbeitet`, changed.join(' · '));
+          }
+          return {
+            situations: state.situations.map((s) =>
+              s.id === id ? normalizeSituation({ ...s, ...updates } as Situation) : s,
+            ),
+          };
+        }),
       reorderSituations: (fromIndex, toIndex) =>
         set((state) => {
           const situations = [...state.situations];
@@ -322,25 +344,49 @@ export const useStore = create<AppState>()(
           return { situations };
         }),
       deleteSituation: (id) =>
-        set((state) => ({
-          situations: state.situations.filter((s) => s.id !== id),
-          scenarios: state.scenarios.map((sc) => ({
-            ...sc,
-            entries: sc.entries.filter((e) => e.situationId !== id),
-            effectEntries: sc.effectEntries.filter((e) => e.situationId !== id),
-          })),
-        })),
+        set((state) => {
+          const sit = state.situations.find((s) => s.id === id);
+          if (sit) logAuditEntry(`Situation "${sit.name}" gelöscht`);
+          return {
+            situations: state.situations.filter((s) => s.id !== id),
+            scenarios: state.scenarios.map((sc) => ({
+              ...sc,
+              entries: sc.entries.filter((e) => e.situationId !== id),
+              effectEntries: sc.effectEntries.filter((e) => e.situationId !== id),
+            })),
+          };
+        }),
 
-      addScenario: (s) =>
-        set((state) => ({ scenarios: [...state.scenarios, normalizeScenario(s)], activeScenarioId: s.id })),
+      addScenario: (s) => {
+        logAuditEntry(`Szenario "${s.name}" hinzugefügt`);
+        set((state) => ({ scenarios: [...state.scenarios, normalizeScenario(s)], activeScenarioId: s.id }));
+      },
       updateScenario: (id, updates) =>
-        set((state) => ({
-          scenarios: state.scenarios.map((s) =>
-            s.id === id ? normalizeScenario({ ...s, ...updates } as Scenario) : s,
-          ),
-        })),
+        set((state) => {
+          const old = state.scenarios.find((s) => s.id === id);
+          if (old) {
+            const changed: string[] = [];
+            if (updates.name !== undefined && updates.name !== old.name)
+              changed.push(`Name: "${old.name}" → "${updates.name}"`);
+            if (updates.initialBalance !== undefined && updates.initialBalance !== old.initialBalance)
+              changed.push(`Startkapital: ${old.initialBalance} → ${updates.initialBalance} €`);
+            if (updates.durationMonths !== undefined && updates.durationMonths !== old.durationMonths)
+              changed.push(`Dauer: ${old.durationMonths} → ${updates.durationMonths} Monate`);
+            if (updates.startMonth !== undefined && updates.startMonth !== old.startMonth)
+              changed.push('Startmonat geändert');
+            if (changed.length > 0)
+              logAuditEntry(`Szenario "${updates.name ?? old.name}" bearbeitet`, changed.join(' · '));
+          }
+          return {
+            scenarios: state.scenarios.map((s) =>
+              s.id === id ? normalizeScenario({ ...s, ...updates } as Scenario) : s,
+            ),
+          };
+        }),
       deleteScenario: (id) =>
         set((state) => {
+          const sc = state.scenarios.find((s) => s.id === id);
+          if (sc) logAuditEntry(`Szenario "${sc.name}" gelöscht`);
           const remaining = state.scenarios.filter((s) => s.id !== id);
           const newActive = state.activeScenarioId === id ? (remaining[0]?.id ?? '') : state.activeScenarioId;
           return { scenarios: remaining, activeScenarioId: newActive };
@@ -350,6 +396,15 @@ export const useStore = create<AppState>()(
       paintEntries: (situationId, paintedMonths, mode) =>
         set((state) => {
           const scenario = state.scenarios.find((s) => s.id === state.activeScenarioId);
+          const sit = state.situations.find((s) => s.id === situationId);
+          if (scenario && sit) {
+            const verb = mode === 'add' ? 'eingetragen' : 'entfernt';
+            logDebounced(
+              `paint-entries-${state.activeScenarioId}-${situationId}`,
+              `Zeitplan geändert – "${sit.name}" ${verb}`,
+              `Szenario: "${scenario.name}", ${paintedMonths.length} Monat(e)`,
+            );
+          }
           if (!scenario) return {};
 
           const situationActive = activeMonthsFromEntries(
@@ -413,6 +468,17 @@ export const useStore = create<AppState>()(
       paintEffectEntries: (situationId, effectId, paintedMonths, mode) =>
         set((state) => {
           const scenario = state.scenarios.find((s) => s.id === state.activeScenarioId);
+          const sit = state.situations.find((s) => s.id === situationId);
+          const effect = sit?.effects.find((e) => e.id === effectId);
+          if (scenario && sit) {
+            const verb = mode === 'add' ? 'aktiviert' : 'deaktiviert';
+            const effectName = effect?.label ?? sit.name;
+            logDebounced(
+              `paint-effect-${state.activeScenarioId}-${situationId}-${effectId}`,
+              `Effekt "${effectName}" ${verb}`,
+              `Szenario: "${scenario.name}"`,
+            );
+          }
           if (!scenario) return {};
 
           const scenarioEnd = addMonths(scenario.startMonth, scenario.durationMonths - 1);
@@ -462,6 +528,10 @@ export const useStore = create<AppState>()(
 
       loadData: (data) => {
         const normalized = normalizeData(data);
+        logAuditEntry(
+          'Daten importiert (JSON)',
+          `${normalized.situations.length} Situationen, ${normalized.scenarios.length} Szenarien`,
+        );
         set({
           situations: normalized.situations,
           scenarios: normalized.scenarios,

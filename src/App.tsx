@@ -8,6 +8,7 @@ import { TimelineEditor } from './components/TimelineEditor';
 import { BalanceChart } from './components/BalanceChart';
 import { ComparisonChart } from './components/ComparisonChart';
 import { ImportExportMenu } from './components/ImportExportMenu';
+import { AuditLogPanel } from './components/AuditLogPanel';
 
 const SIDEBAR_MIN_W = 220;
 const SIDEBAR_MAX_W = 520;
@@ -62,6 +63,7 @@ export function App() {
     readPersistedNumber(LAYOUT_TIMELINE_KEY, 288, TIMELINE_MIN_H, TIMELINE_MAX_H),
   );
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [showAuditLog, setShowAuditLog] = useState(false);
 
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const chartScrollRef = useRef<HTMLDivElement | null>(null);
@@ -215,6 +217,13 @@ export function App() {
             <span className={`w-2 h-2 rounded-full ${syncDotClass}`} />
             <span>Sync {syncStatus}</span>
           </div>
+          <button
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+            onClick={() => setShowAuditLog(true)}
+            title="Änderungsprotokoll"
+          >
+            📋
+          </button>
           <ImportExportMenu />
           {scenarios.length > 1 && (
             <button
@@ -375,6 +384,8 @@ export function App() {
           </div>
         </div>
       )}
+
+      {showAuditLog && <AuditLogPanel onClose={() => setShowAuditLog(false)} />}
     </div>
   );
 }
