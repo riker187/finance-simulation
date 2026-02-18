@@ -22,6 +22,7 @@ function emptyEffect(base?: Pick<FinancialEffect, 'type' | 'category'>): Financi
 
 export function SituationForm({ initial, onSave, onCancel }: Props) {
   const situations = useStore((s) => s.situations);
+  const scenarios = useStore((s) => s.scenarios);
 
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
@@ -57,6 +58,15 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
     () => categorySuggestions.filter((c) => c !== DEFAULT_SITUATION_CATEGORY),
     [categorySuggestions],
   );
+
+  const usageScenarioNames = useMemo(() => {
+    if (!initial) return [] as string[];
+    return scenarios
+      .filter((scenario) => scenario.entries.some((entry) => entry.situationId === initial.id))
+      .map((scenario) => scenario.name);
+  }, [scenarios, initial]);
+
+  const affectsMultipleScenarios = usageScenarioNames.length > 1;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -106,6 +116,13 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
         <h2 className="text-lg font-semibold text-white">
           {initial ? 'Situation bearbeiten' : 'Neue Situation'}
         </h2>
+
+        {initial && affectsMultipleScenarios && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            Achtung: Diese Situation wird in {usageScenarioNames.length} Szenarien verwendet ({usageScenarioNames.join(', ')}).
+            Aenderungen wirken sich in allen betroffenen Szenarien aus.
+          </div>
+        )}
 
         {/* Name */}
         <div className="space-y-1">

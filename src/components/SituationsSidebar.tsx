@@ -11,6 +11,7 @@ interface Props {
 export function SituationsSidebar({ width }: Props) {
   const situations = useStore((s) => s.situations);
   const addSituation = useStore((s) => s.addSituation);
+  const duplicateSituation = useStore((s) => s.duplicateSituation);
   const updateSituation = useStore((s) => s.updateSituation);
   const deleteSituation = useStore((s) => s.deleteSituation);
 
@@ -95,6 +96,13 @@ export function SituationsSidebar({ width }: Props) {
 
                 {/* Action buttons (visible on hover) */}
                 <div className="absolute right-2 top-2 hidden group-hover:flex gap-1">
+                  <button
+                    className="p-1 rounded text-slate-500 hover:text-emerald-400 hover:bg-slate-700 transition-colors text-xs"
+                    onClick={() => duplicateSituation(sit.id)}
+                    title="Duplizieren"
+                  >
+                    ⧉
+                  </button>
                   <button
                     className="p-1 rounded text-slate-500 hover:text-blue-400 hover:bg-slate-700 transition-colors text-xs"
                     onClick={() => setEditing(sit)}
