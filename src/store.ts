@@ -133,6 +133,9 @@ interface AppState {
   // Entry painting (batch update of entries for a situation in active scenario)
   paintEntries: (situationId: string, months: string[], mode: 'add' | 'remove') => void;
 
+  // Data import/export
+  loadData: (data: { situations: Situation[]; scenarios: Scenario[] }) => void;
+
   // UI
   setCompareMode: (v: boolean) => void;
 }
@@ -236,6 +239,14 @@ export const useStore = create<AppState>()(
                 : s,
             ),
           };
+        }),
+
+      loadData: ({ situations, scenarios }) =>
+        set({
+          situations,
+          scenarios,
+          activeScenarioId: scenarios[0]?.id ?? '',
+          compareMode: false,
         }),
 
       setCompareMode: (v) => set({ compareMode: v }),

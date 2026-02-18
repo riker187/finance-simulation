@@ -1,0 +1,194 @@
+import { useRef, useState, useEffect } from 'react';
+import { useStore } from '../store';
+import type { Situation, Scenario } from '../types';
+
+interface ExportFile {
+  version: number;
+  exportedAt: string;
+  situations: Situation[];
+  scenarios: Scenario[];
+}
+
+function isValidData(data: unknown): data is ExportFile {
+  if (!data || typeof data !== 'object') return false;
+  const d = data as Record<string, unknown>;
+  return Array.isArray(d.situations) && Array.isArray(d.scenarios);
+}
+
+export function ImportExportMenu() {
+  const situations = useStore((s) => s.situations);
+  const scenarios = useStore((s) => s.scenarios);
+  const loadData = useStore((s) => s.loadData);
+
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState<ExportFile | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const menuRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // ── Export ──────────────────────────────────────────────────────────────────
+
+  const handleExport = () => {
+    const payload: ExportFile = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      situations,
+      scenarios,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `finanz-simulator-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setOpen(false);
+  };
+
+  // ── Import ──────────────────────────────────────────────────────────────────
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset so the same file can be re-imported if needed
+    e.target.value = '';
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(ev.target?.result as string);
+        if (!isValidData(parsed)) throw new Error('Unbekanntes Format');
+        setImportError(null);
+        setPending(parsed);
+      } catch {
+        setImportError('Die Datei konnte nicht gelesen werden. Bitte eine gültige Export-Datei wählen.');
+      }
+    };
+    reader.readAsText(file);
+    setOpen(false);
+  };
+
+  const confirmImport = () => {
+    if (!pending) return;
+    loadData({ situations: pending.situations, scenarios: pending.scenarios });
+    setPending(null);
+  };
+
+  return (
+    <>
+      {/* Dropdown trigger */}
+      <div ref={menuRef} className="relative">
+        <button
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+          onClick={() => setOpen((v) => !v)}
+          title="Daten importieren oder exportieren"
+        >
+          <span>⇅</span>
+          <span>Daten</span>
+        </button>
+
+        {open && (
+          <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl bg-slate-800 border border-slate-700 shadow-2xl overflow-hidden z-40">
+            <button
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors text-left"
+              onClick={handleExport}
+            >
+              <span className="text-base leading-none">↓</span>
+              Exportieren
+            </button>
+            <div className="border-t border-slate-700" />
+            <button
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors text-left"
+              onClick={() => fileRef.current?.click()}
+            >
+              <span className="text-base leading-none">↑</span>
+              Importieren
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Hidden file input */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      {/* Import error */}
+      {importError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full mx-4 space-y-4">
+            <h2 className="text-white font-semibold">Import fehlgeschlagen</h2>
+            <p className="text-sm text-slate-400">{importError}</p>
+            <div className="flex justify-end">
+              <button
+                className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm transition-colors"
+                onClick={() => setImportError(null)}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import confirmation */}
+      {pending && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full mx-4 space-y-4">
+            <h2 className="text-white font-semibold">Daten importieren?</h2>
+            <p className="text-sm text-slate-400">
+              Die aktuellen Daten werden durch den Import überschrieben. Diese Aktion kann nicht rückgängig gemacht werden.
+            </p>
+            <div className="rounded-lg bg-slate-900 border border-slate-700 px-4 py-3 text-xs text-slate-400 space-y-1">
+              <div className="flex justify-between">
+                <span>Situationen</span>
+                <span className="text-white font-medium">{pending.situations.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Szenarien</span>
+                <span className="text-white font-medium">{pending.scenarios.length}</span>
+              </div>
+              {pending.exportedAt && (
+                <div className="flex justify-between">
+                  <span>Exportiert am</span>
+                  <span className="text-white font-medium">
+                    {new Date(pending.exportedAt).toLocaleDateString('de-DE')}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 justify-end pt-1">
+              <button
+                className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white transition-colors"
+                onClick={() => setPending(null)}
+              >
+                Abbrechen
+              </button>
+              <button
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
+                onClick={confirmImport}
+              >
+                Importieren
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

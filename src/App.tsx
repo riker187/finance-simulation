@@ -6,6 +6,7 @@ import { ScenarioSettings } from './components/ScenarioSettings';
 import { TimelineEditor } from './components/TimelineEditor';
 import { BalanceChart } from './components/BalanceChart';
 import { ComparisonChart } from './components/ComparisonChart';
+import { ImportExportMenu } from './components/ImportExportMenu';
 
 export function App() {
   const compareMode = useStore((s) => s.compareMode);
@@ -40,7 +41,9 @@ export function App() {
           </div>
         </div>
 
-        {scenarios.length > 1 && (
+        <div className="flex items-center gap-2">
+          <ImportExportMenu />
+          {scenarios.length > 1 && (
           <button
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               compareMode
@@ -51,7 +54,8 @@ export function App() {
           >
             <span>{compareMode ? '← Zurück' : '⇄ Vergleich'}</span>
           </button>
-        )}
+          )}
+        </div>
       </header>
 
       {compareMode ? (
