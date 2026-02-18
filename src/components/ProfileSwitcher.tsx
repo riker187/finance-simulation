@@ -149,19 +149,9 @@ export function ProfileSwitcher() {
                     >
                       {profile.name}
                     </button>
-                    {profile.id === activeId ? (
-                      <svg
-                        className="w-3.5 h-3.5 text-indigo-400 shrink-0"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <path d="M3 8l3.5 3.5L13 5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    ) : (
+                    <div className="flex items-center gap-1">
+                      {/* Rename button — visible on hover for all profiles */}
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {/* Rename */}
                         <button
                           onClick={() => {
                             setEditingId(profile.id);
@@ -174,8 +164,8 @@ export function ProfileSwitcher() {
                             <path d="M11 2l3 3-8 8H3v-3L11 2z" strokeLinejoin="round" />
                           </svg>
                         </button>
-                        {/* Delete (not default) */}
-                        {profile.id !== 'default' && (
+                        {/* Delete (not default, not active) */}
+                        {profile.id !== 'default' && profile.id !== activeId && (
                           <button
                             onClick={() => handleDelete(profile.id)}
                             className="text-slate-400 hover:text-rose-400 p-0.5 rounded transition-colors"
@@ -187,7 +177,19 @@ export function ProfileSwitcher() {
                           </button>
                         )}
                       </div>
-                    )}
+                      {/* Active checkmark */}
+                      {profile.id === activeId && (
+                        <svg
+                          className="w-3.5 h-3.5 text-indigo-400 shrink-0"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                        >
+                          <path d="M3 8l3.5 3.5L13 5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </div>
                   </>
                 )}
               </li>
