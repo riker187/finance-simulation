@@ -5,6 +5,10 @@ import { DEFAULT_SITUATION_CATEGORY } from './types';
 import { currentMonth, addMonths, monthsToRanges, rangeToMonths, formatMonthShort } from './utils/months';
 import { uid } from './utils/uid';
 import { logAuditEntry, logDebounced } from './utils/auditLog';
+import { getActiveProfileId } from './utils/profiles';
+
+const _pid = getActiveProfileId();
+const STORE_KEY = _pid === 'default' ? 'finance-simulator-v1' : `finance-simulator-v1:${_pid}`;
 
 function normalizeSituation(s: Situation): Situation {
   const category = typeof s.category === 'string' ? s.category.trim() : '';
@@ -597,7 +601,7 @@ export const useStore = create<AppState>()(
       setCompareMode: (v) => set({ compareMode: v }),
     }),
     {
-      name: 'finance-simulator-v1',
+      name: STORE_KEY,
       version: 5,
       migrate: (persistedState, fromVersion) => {
         const state = (persistedState ?? {}) as Partial<AppState>;

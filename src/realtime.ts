@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from './store';
 import { uid } from './utils/uid';
+import { getActiveProfileId } from './utils/profiles';
 import type { Situation, Scenario } from './types';
+
+const _profileId = getActiveProfileId();
+const PROFILE_Q = _profileId === 'default' ? '' : `?profile=${encodeURIComponent(_profileId)}`;
 
 type SharedData = { situations: Situation[]; scenarios: Scenario[] };
 type SyncStatus = 'connecting' | 'online' | 'offline';
@@ -38,7 +42,7 @@ export function useRealtimeSync(): SyncStatus {
 
     const pushState = async (data: SharedData) => {
       try {
-        const response = await fetch('/api/state', {
+        const response = await fetch('/api/state' + PROFILE_Q, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -81,7 +85,7 @@ export function useRealtimeSync(): SyncStatus {
 
     const connectEvents = () => {
       if (isClosed) return;
-      eventSource = new EventSource('/api/events');
+      eventSource = new EventSource('/api/events' + PROFILE_Q);
 
       eventSource.onopen = () => setStatus('online');
 
@@ -108,7 +112,7 @@ export function useRealtimeSync(): SyncStatus {
 
     const bootstrap = async () => {
       try {
-        const response = await fetch('/api/state', { cache: 'no-store' });
+        const response = await fetch('/api/state' + PROFILE_Q, { cache: 'no-store' });
         if (!response.ok) throw new Error('sync_state_request_failed');
         const remote = (await response.json()) as SyncStateMessage;
 

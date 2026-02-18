@@ -9,6 +9,7 @@ import { BalanceChart } from './components/BalanceChart';
 import { ComparisonChart } from './components/ComparisonChart';
 import { ImportExportMenu } from './components/ImportExportMenu';
 import { AuditLogPanel } from './components/AuditLogPanel';
+import { ProfileSwitcher } from './components/ProfileSwitcher';
 
 const SIDEBAR_MIN_W = 220;
 const SIDEBAR_MAX_W = 520;
@@ -217,6 +218,7 @@ export function App() {
             <span className={`w-2 h-2 rounded-full ${syncDotClass}`} />
             <span>Sync {syncStatus}</span>
           </div>
+          <ProfileSwitcher />
           <button
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
             onClick={() => setShowAuditLog(true)}
