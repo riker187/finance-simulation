@@ -7,6 +7,7 @@ import {
   Tooltip,
   Legend,
   ReferenceLine,
+  ReferenceArea,
   ResponsiveContainer,
 } from 'recharts';
 import { useStore } from '../store';
@@ -56,6 +57,7 @@ export function ComparisonChart() {
   const minBalance = Math.min(...allBalances);
   const maxBalance = Math.max(...allBalances);
   const padding = Math.max((maxBalance - minBalance) * 0.1, 500);
+  const negativeFloor = Math.min(0, minBalance - padding);
 
   const CustomTooltip = ({
     active,
@@ -77,16 +79,10 @@ export function ComparisonChart() {
             return (
               <div key={entry.dataKey} className="flex justify-between gap-4">
                 <span className="flex items-center gap-1.5">
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: entry.color }}
-                  />
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
                   <span className="text-slate-400">{sc.name}</span>
                 </span>
-                <span
-                  className="font-semibold"
-                  style={{ color: entry.value >= 0 ? 'white' : '#fb7185' }}
-                >
+                <span className="font-semibold" style={{ color: entry.value >= 0 ? 'white' : '#fb7185' }}>
                   {formatEur(entry.value)}
                 </span>
               </div>
@@ -106,10 +102,7 @@ export function ComparisonChart() {
             <div className="w-6 h-0.5 rounded" style={{ backgroundColor: sc.color }} />
             <span className="text-slate-400">{sc.name}</span>
             {lastPoint && (
-              <span
-                className="font-semibold"
-                style={{ color: lastPoint.balance >= 0 ? sc.color : '#fb7185' }}
-              >
+              <span className="font-semibold" style={{ color: lastPoint.balance >= 0 ? sc.color : '#fb7185' }}>
                 {formatEur(lastPoint.balance)}
               </span>
             )}
@@ -120,7 +113,12 @@ export function ComparisonChart() {
   );
 
   return (
-    <div className="w-full h-full flex flex-col">
+    <div className="w-full h-full flex flex-col relative">
+      <div className="absolute right-2 top-0 z-10 pointer-events-none">
+        <span className="text-[11px] px-2 py-1 rounded-md bg-red-950/80 border border-red-500/60 text-red-200">
+          Kritischer Bereich: Kontostand unter 0 EUR
+        </span>
+      </div>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} margin={{ top: 16, right: 24, left: 16, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
@@ -140,9 +138,16 @@ export function ComparisonChart() {
             width={52}
             domain={[minBalance - padding, maxBalance + padding]}
           />
+          <ReferenceArea
+            y1={negativeFloor}
+            y2={0}
+            fill="#ef4444"
+            fillOpacity={0.12}
+            ifOverflow="extendDomain"
+          />
           <Tooltip content={<CustomTooltip />} />
           <Legend content={<CustomLegend />} />
-          <ReferenceLine y={0} stroke="#334155" strokeDasharray="4 4" />
+          <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="6 4" strokeWidth={2} />
           {scenarios.map((sc) => (
             <Line
               key={sc.id}

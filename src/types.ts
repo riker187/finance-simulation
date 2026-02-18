@@ -9,10 +9,21 @@ export interface FinancialEffect {
   amount: number; // always positive; category determines sign
 }
 
+export const DEFAULT_SITUATION_CATEGORY = 'Ohne Kategorie';
+export const SITUATION_CATEGORY_SUGGESTIONS = [
+  'Einkommen',
+  'Fixkosten',
+  'Variable Kosten',
+  'Sparen & Investieren',
+  'Einmalige Ereignisse',
+  DEFAULT_SITUATION_CATEGORY,
+] as const;
+
 export interface Situation {
   id: string;
   name: string;
   description: string;
+  category: string;
   color: string;
   effects: FinancialEffect[];
 }
@@ -21,7 +32,13 @@ export interface ScenarioEntry {
   id: string;
   situationId: string;
   startMonth: string; // 'YYYY-MM'
-  endMonth: string;   // 'YYYY-MM' (inclusive)
+  endMonth: string; // 'YYYY-MM' (inclusive)
+}
+
+export interface SavingsBalancePoint {
+  id: string;
+  month: string; // 'YYYY-MM'
+  balance: number;
 }
 
 export interface Scenario {
@@ -29,13 +46,14 @@ export interface Scenario {
   name: string;
   color: string;
   initialBalance: number;
-  startMonth: string;      // 'YYYY-MM'
+  startMonth: string; // 'YYYY-MM'
   durationMonths: number;
   entries: ScenarioEntry[];
+  savingsBalancePoints: SavingsBalancePoint[];
 }
 
 export interface MonthlyBalance {
-  month: string;   // 'YYYY-MM'
+  month: string; // 'YYYY-MM'
   balance: number;
   income: number;
   expenses: number;

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useStore } from '../store';
 import type { Scenario } from '../types';
 import { currentMonth } from '../utils/months';
+import { uid } from '../utils/uid';
 import { SITUATION_COLORS } from '../types';
 
 function ScenarioFormModal({
@@ -21,13 +22,14 @@ function ScenarioFormModal({
 
   const handleSave = () => {
     onSave({
-      id: initial?.id ?? crypto.randomUUID(),
+      id: initial?.id ?? uid(),
       name: name.trim() || 'Szenario',
       color,
       initialBalance,
       startMonth,
       durationMonths: Math.max(1, durationMonths),
       entries: initial?.entries ?? [],
+      savingsBalancePoints: initial?.savingsBalancePoints ?? [],
     });
   };
 
@@ -137,9 +139,10 @@ export function ScenarioTabs() {
   const duplicateScenario = (sc: Scenario) => {
     const copy: Scenario = {
       ...sc,
-      id: crypto.randomUUID(),
+      id: uid(),
       name: `Kopie von ${sc.name}`,
-      entries: sc.entries.map((e) => ({ ...e, id: crypto.randomUUID() })),
+      entries: sc.entries.map((e) => ({ ...e, id: uid() })),
+      savingsBalancePoints: sc.savingsBalancePoints.map((p) => ({ ...p, id: uid() })),
     };
     addScenario(copy);
   };
@@ -157,10 +160,7 @@ export function ScenarioTabs() {
             onClick={() => setActiveScenario(sc.id)}
             onDoubleClick={() => setEditing(sc)}
           >
-            <span
-              className="w-2.5 h-2.5 rounded-full shrink-0"
-              style={{ backgroundColor: sc.color }}
-            />
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: sc.color }} />
             {sc.name}
           </button>
 

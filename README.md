@@ -52,8 +52,9 @@ A web-based **"what-if" financial planning tool** — not accounting software, n
 | Charts | Recharts |
 | Styling | Tailwind CSS v3 (dark theme) |
 | Container | Docker + nginx (multi-stage) |
+| Sync Service | Node.js (SSE + REST) |
 
-No backend, no database, no account required.
+No central account required. A lightweight sync service shares scenario data across active clients.
 
 ---
 

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from './store';
+import { useRealtimeSync } from './realtime';
 import { SituationsSidebar } from './components/SituationsSidebar';
 import { ScenarioTabs } from './components/ScenarioTabs';
 import { ScenarioSettings } from './components/ScenarioSettings';
@@ -8,70 +9,252 @@ import { BalanceChart } from './components/BalanceChart';
 import { ComparisonChart } from './components/ComparisonChart';
 import { ImportExportMenu } from './components/ImportExportMenu';
 
+const SIDEBAR_MIN_W = 220;
+const SIDEBAR_MAX_W = 520;
+const TIMELINE_MIN_H = 180;
+const TIMELINE_MAX_H = 520;
+const LAYOUT_SIDEBAR_KEY = 'finance-simulator-layout.sidebar-width';
+const LAYOUT_TIMELINE_KEY = 'finance-simulator-layout.timeline-height';
+const TIMELINE_LABEL_W = 210;
+const TIMELINE_CELL_W = 56;
+
+function readPersistedNumber(key: string, fallback: number, min: number, max: number): number {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return fallback;
+    return Math.min(max, Math.max(min, value));
+  } catch {
+    return fallback;
+  }
+}
+
+function getCurrentBundlePath(): string | null {
+  const script = document.querySelector('script[src*="/assets/index-"]') as HTMLScriptElement | null;
+  if (!script?.src) return null;
+  try {
+    return new URL(script.src, window.location.origin).pathname;
+  } catch {
+    return null;
+  }
+}
+
+function extractLatestBundlePath(indexHtml: string): string | null {
+  const match = indexHtml.match(/<script[^>]+src="([^\"]*\/assets\/index-[^\"]+\.js)"/i);
+  return match?.[1] ?? null;
+}
+
 export function App() {
   const compareMode = useStore((s) => s.compareMode);
   const setCompareMode = useStore((s) => s.setCompareMode);
   const scenarios = useStore((s) => s.scenarios);
   const activeScenarioId = useStore((s) => s.activeScenarioId);
+  const syncStatus = useRealtimeSync();
 
-  // Overlay: additional scenario IDs rendered on top of the active chart
+  const activeScenario = scenarios.find((s) => s.id === activeScenarioId);
+
   const [overlayIds, setOverlayIds] = useState<string[]>([]);
+  const [sidebarWidth, setSidebarWidth] = useState(() =>
+    readPersistedNumber(LAYOUT_SIDEBAR_KEY, 256, SIDEBAR_MIN_W, SIDEBAR_MAX_W),
+  );
+  const [timelineHeight, setTimelineHeight] = useState(() =>
+    readPersistedNumber(LAYOUT_TIMELINE_KEY, 288, TIMELINE_MIN_H, TIMELINE_MAX_H),
+  );
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+  const chartScrollRef = useRef<HTMLDivElement | null>(null);
+  const syncingRef = useRef<'timeline' | 'chart' | null>(null);
+
+  const monthCount = Math.max(1, activeScenario?.durationMonths ?? 1);
+  const timelineContentWidth = TIMELINE_LABEL_W + monthCount * TIMELINE_CELL_W;
+  const chartPlotWidth = monthCount * TIMELINE_CELL_W;
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LAYOUT_SIDEBAR_KEY, String(sidebarWidth));
+    } catch {
+      // ignore storage errors
+    }
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LAYOUT_TIMELINE_KEY, String(timelineHeight));
+    } catch {
+      // ignore storage errors
+    }
+  }, [timelineHeight]);
+
+  useEffect(() => {
+    const currentBundle = getCurrentBundlePath();
+    if (!currentBundle) return;
+
+    let cancelled = false;
+
+    const checkForUpdate = async () => {
+      try {
+        const response = await fetch(`/index.html?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) return;
+        const html = await response.text();
+        const latestBundle = extractLatestBundlePath(html);
+        if (!latestBundle) return;
+        if (latestBundle !== currentBundle && !cancelled) {
+          setUpdateAvailable(true);
+        }
+      } catch {
+        // ignore transient network errors
+      }
+    };
+
+    const timer = window.setInterval(checkForUpdate, 45000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
   const toggleOverlay = (id: string) =>
     setOverlayIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  // Filter out stale IDs (scenario deleted or is now the active one)
+  const syncHorizontalScroll = (source: 'timeline' | 'chart', left: number) => {
+    if (syncingRef.current && syncingRef.current !== source) return;
+    syncingRef.current = source;
+
+    const target = source === 'timeline' ? chartScrollRef.current : timelineScrollRef.current;
+    if (target && Math.abs(target.scrollLeft - left) > 1) {
+      target.scrollLeft = left;
+    }
+
+    requestAnimationFrame(() => {
+      syncingRef.current = null;
+    });
+  };
+
+  const startSidebarResize = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    const body = document.body;
+    const prevCursor = body.style.cursor;
+    const prevUserSelect = body.style.userSelect;
+    body.style.cursor = 'col-resize';
+    body.style.userSelect = 'none';
+
+    const onMove = (moveEvent: MouseEvent) => {
+      const next = startWidth + (moveEvent.clientX - startX);
+      setSidebarWidth(Math.min(SIDEBAR_MAX_W, Math.max(SIDEBAR_MIN_W, next)));
+    };
+
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      body.style.cursor = prevCursor;
+      body.style.userSelect = prevUserSelect;
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const startTimelineResize = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startHeight = timelineHeight;
+
+    const body = document.body;
+    const prevCursor = body.style.cursor;
+    const prevUserSelect = body.style.userSelect;
+    body.style.cursor = 'row-resize';
+    body.style.userSelect = 'none';
+
+    const onMove = (moveEvent: MouseEvent) => {
+      const next = startHeight + (moveEvent.clientY - startY);
+      setTimelineHeight(Math.min(TIMELINE_MAX_H, Math.max(TIMELINE_MIN_H, next)));
+    };
+
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      body.style.cursor = prevCursor;
+      body.style.userSelect = prevUserSelect;
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
   const cleanOverlayIds = overlayIds.filter(
     (id) => id !== activeScenarioId && scenarios.some((s) => s.id === id),
   );
 
-  // Other scenarios that can be overlaid
   const otherScenarios = scenarios.filter((s) => s.id !== activeScenarioId);
+
+  const syncDotClass =
+    syncStatus === 'online'
+      ? 'bg-emerald-500'
+      : syncStatus === 'connecting'
+      ? 'bg-amber-400'
+      : 'bg-rose-500';
 
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-white overflow-hidden">
-      {/* Header */}
       <header className="flex items-center justify-between px-6 py-3 border-b border-slate-800 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-sm">
-            📈
-          </div>
+          <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-sm">📈</div>
           <div>
             <h1 className="text-sm font-semibold text-white leading-none">Finanz-Simulator</h1>
             <p className="text-xs text-slate-500 leading-none mt-0.5">Was-wäre-wenn Planung</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 text-xs text-slate-400" title="Synchronisationsstatus">
+            <span className={`w-2 h-2 rounded-full ${syncDotClass}`} />
+            <span>Sync {syncStatus}</span>
+          </div>
           <ImportExportMenu />
           {scenarios.length > 1 && (
-          <button
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              compareMode
-                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
-            }`}
-            onClick={() => setCompareMode(!compareMode)}
-          >
-            <span>{compareMode ? '← Zurück' : '⇄ Vergleich'}</span>
-          </button>
+            <button
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                compareMode
+                  ? 'bg-blue-600 text-white hover:bg-blue-500'
+                  : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+              }`}
+              onClick={() => setCompareMode(!compareMode)}
+            >
+              <span>{compareMode ? '← Zurück' : '⇄ Vergleich'}</span>
+            </button>
           )}
         </div>
       </header>
 
+      {updateAvailable && (
+        <div className="shrink-0 bg-amber-950/80 border-b border-amber-700/70 px-6 py-2 flex items-center justify-between gap-3">
+          <span className="text-xs text-amber-200">
+            Neue UI-Version verfügbar. Bitte neu laden, um das Update zu sehen.
+          </span>
+          <button
+            className="px-2.5 py-1 rounded-md text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold"
+            onClick={() => window.location.reload()}
+          >
+            Neu laden
+          </button>
+        </div>
+      )}
+
       {compareMode ? (
-        /* ── Comparison View ── */
         <div className="flex-1 flex flex-col min-h-0 p-4">
           <div className="mb-4">
             <h2 className="text-base font-semibold text-white">Szenariovergleich</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {scenarios.length} Szenarien im Vergleich
-            </p>
+            <p className="text-xs text-slate-500 mt-0.5">{scenarios.length} Szenarien im Vergleich</p>
           </div>
           <div className="flex-1 min-h-0 rounded-xl bg-slate-900 border border-slate-800 p-4">
             <ComparisonChart />
           </div>
 
-          {/* Summary table */}
           <div className="mt-4 rounded-xl bg-slate-900 border border-slate-800 overflow-hidden">
             <table className="w-full text-xs">
               <thead>
@@ -92,11 +275,13 @@ export function App() {
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-right text-slate-300">
-                      {sc.initialBalance.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })}
+                      {sc.initialBalance.toLocaleString('de-DE', {
+                        style: 'currency',
+                        currency: 'EUR',
+                        maximumFractionDigits: 0,
+                      })}
                     </td>
-                    <td className="px-4 py-2.5 text-right text-slate-300">
-                      {sc.durationMonths} Mo.
-                    </td>
+                    <td className="px-4 py-2.5 text-right text-slate-300">{sc.durationMonths} Mo.</td>
                     <td className="px-4 py-2.5 text-right text-slate-300">
                       {new Set(sc.entries.map((e) => e.situationId)).size}
                     </td>
@@ -107,37 +292,42 @@ export function App() {
           </div>
         </div>
       ) : (
-        /* ── Editor View ── */
         <div className="flex flex-1 min-h-0">
-          {/* Left sidebar */}
-          <SituationsSidebar />
+          <SituationsSidebar width={sidebarWidth} />
 
-          {/* Main panel */}
+          <div
+            className="w-1.5 shrink-0 cursor-col-resize bg-slate-900 hover:bg-blue-500/60 active:bg-blue-500/80 transition-colors"
+            onMouseDown={startSidebarResize}
+            title="Breite der Situationsspalte anpassen"
+          />
+
           <div className="flex flex-col flex-1 min-w-0 min-h-0">
-            {/* Scenario tabs */}
             <ScenarioTabs />
-
-            {/* Scenario summary bar */}
             <ScenarioSettings />
 
-            {/* Timeline + Chart split */}
             <div className="flex flex-col flex-1 min-h-0">
-              {/* Timeline */}
-              <div className="overflow-auto border-b border-slate-800 shrink-0 max-h-72">
+              <div
+                ref={timelineScrollRef}
+                onScroll={(e) => syncHorizontalScroll('timeline', e.currentTarget.scrollLeft)}
+                className="overflow-auto border-b border-slate-800 shrink-0"
+                style={{ height: timelineHeight }}
+              >
                 <div className="min-w-0">
                   <div className="px-4 py-2 flex items-center gap-2 border-b border-slate-800/50">
-                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                      Zeitplan
-                    </span>
+                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Zeitplan</span>
                   </div>
                   <TimelineEditor />
                 </div>
               </div>
 
-              {/* Balance chart */}
-              <div className="flex-1 min-h-0 flex flex-col p-4">
-                {/* Chart header: label + overlay toggles */}
-                <div className="mb-2 flex items-center gap-3 flex-wrap">
+              <div
+                className="h-1.5 shrink-0 cursor-row-resize bg-slate-900 hover:bg-blue-500/60 active:bg-blue-500/80 transition-colors"
+                onMouseDown={startTimelineResize}
+                title="Hoehe des Zeitplans anpassen"
+              />
+
+              <div className="flex-1 min-h-0 flex flex-col">
+                <div className="mb-2 px-4 pt-4 flex items-center gap-3 flex-wrap">
                   <span className="text-xs font-medium text-slate-500 uppercase tracking-wide shrink-0">
                     Kontostandverlauf
                   </span>
@@ -150,7 +340,11 @@ export function App() {
                         className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs border transition-colors"
                         style={
                           active
-                            ? { borderColor: sc.color + 'aa', backgroundColor: sc.color + '22', color: 'white' }
+                            ? {
+                                borderColor: sc.color + 'aa',
+                                backgroundColor: sc.color + '22',
+                                color: 'white',
+                              }
                             : { borderColor: '#334155', color: '#64748b' }
                         }
                         title={active ? `${sc.name} ausblenden` : `${sc.name} einblenden`}
@@ -165,8 +359,16 @@ export function App() {
                   })}
                 </div>
 
-                <div className="flex-1 min-h-0">
-                  <BalanceChart overlayScenarioIds={cleanOverlayIds} />
+                <div
+                  ref={chartScrollRef}
+                  onScroll={(e) => syncHorizontalScroll('chart', e.currentTarget.scrollLeft)}
+                  className="flex-1 min-h-0 overflow-x-auto pb-4"
+                >
+                  <div style={{ width: timelineContentWidth, height: '100%' }}>
+                    <div style={{ width: chartPlotWidth, height: '100%', marginLeft: TIMELINE_LABEL_W }}>
+                      <BalanceChart overlayScenarioIds={cleanOverlayIds} />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

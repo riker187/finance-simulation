@@ -5,5 +5,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: parseInt(process.env.DEV_PORT ?? '5173'),
+    proxy: {
+      '/api': {
+        target: process.env.SYNC_PROXY_TARGET ?? 'http://localhost:8787',
+        changeOrigin: true,
+      },
+    },
   },
 });

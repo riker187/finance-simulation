@@ -1,10 +1,38 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Situation, Scenario, ScenarioEntry } from './types';
+import { DEFAULT_SITUATION_CATEGORY } from './types';
 import { currentMonth, addMonths, monthsToRanges, rangeToMonths, sortMonths } from './utils/months';
+import { uid } from './utils/uid';
 
-function uid(): string {
-  return crypto.randomUUID();
+function normalizeSituation(s: Situation): Situation {
+  const category = typeof s.category === 'string' ? s.category.trim() : '';
+  return {
+    ...s,
+    category: category || DEFAULT_SITUATION_CATEGORY,
+  };
+}
+
+function normalizeSituations(situations: Situation[]): Situation[] {
+  return situations.map((s) => normalizeSituation(s));
+}
+
+function normalizeScenario(sc: Scenario): Scenario {
+  return {
+    ...sc,
+    savingsBalancePoints: Array.isArray(sc.savingsBalancePoints) ? sc.savingsBalancePoints : [],
+  };
+}
+
+function normalizeScenarios(scenarios: Scenario[]): Scenario[] {
+  return scenarios.map((s) => normalizeScenario(s));
+}
+
+function normalizeData(data: { situations: Situation[]; scenarios: Scenario[] }) {
+  return {
+    situations: normalizeSituations(data.situations),
+    scenarios: normalizeScenarios(data.scenarios),
+  };
 }
 
 // ── Sample data ───────────────────────────────────────────────────────────────
@@ -16,6 +44,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
     id: 'sit-vollzeit',
     name: 'Vollzeitjob',
     description: 'Monatliches Gehalt aus Vollzeitanstellung',
+    category: 'Einkommen',
     color: '#4f8aff',
     effects: [{ id: uid(), label: 'Gehalt', type: 'recurring', category: 'income', amount: 3200 }],
   };
@@ -23,6 +52,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
     id: 'sit-miete',
     name: 'Miete',
     description: 'Monatliche Kaltmiete inkl. Nebenkosten',
+    category: 'Fixkosten',
     color: '#fb7185',
     effects: [{ id: uid(), label: 'Miete', type: 'recurring', category: 'expense', amount: 900 }],
   };
@@ -30,6 +60,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
     id: 'sit-leben',
     name: 'Lebenshaltung',
     description: 'Lebensmittel, Freizeit, Kleidung etc.',
+    category: 'Variable Kosten',
     color: '#f97316',
     effects: [{ id: uid(), label: 'Lebenshaltung', type: 'recurring', category: 'expense', amount: 600 }],
   };
@@ -37,6 +68,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
     id: 'sit-teilzeit',
     name: 'Teilzeitjob',
     description: 'Einkommen aus Teilzeitarbeit',
+    category: 'Einkommen',
     color: '#06b6d4',
     effects: [{ id: uid(), label: 'Gehalt (Teilzeit)', type: 'recurring', category: 'income', amount: 1400 }],
   };
@@ -44,6 +76,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
     id: 'sit-auto',
     name: 'Autokauf',
     description: 'Einmaliger Fahrzeugkauf',
+    category: 'Einmalige Ereignisse',
     color: '#f59e0b',
     effects: [{ id: uid(), label: 'Kaufpreis', type: 'one-time', category: 'expense', amount: 12000 }],
   };
@@ -51,6 +84,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
     id: 'sit-steuer',
     name: 'Steuerrückzahlung',
     description: 'Jährliche Steuererstattung',
+    category: 'Einmalige Ereignisse',
     color: '#22c55e',
     effects: [{ id: uid(), label: 'Erstattung', type: 'one-time', category: 'income', amount: 1500 }],
   };
@@ -69,6 +103,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
       { id: uid(), situationId: sit2.id, startMonth: start, endMonth: end24 },
       { id: uid(), situationId: sit3.id, startMonth: start, endMonth: end24 },
     ],
+    savingsBalancePoints: [],
   };
 
   const switchMonth = addMonths(start, 6);
@@ -85,6 +120,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
       { id: uid(), situationId: sit2.id, startMonth: start, endMonth: end24 },
       { id: uid(), situationId: sit3.id, startMonth: start, endMonth: end24 },
     ],
+    savingsBalancePoints: [],
   };
 
   const steuerMonth = addMonths(start, 2);
@@ -102,6 +138,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
       { id: uid(), situationId: sit6.id, startMonth: steuerMonth, endMonth: steuerMonth },
       { id: uid(), situationId: sit5.id, startMonth: autoMonth, endMonth: autoMonth },
     ],
+    savingsBalancePoints: [],
   };
 
   return {
@@ -135,6 +172,7 @@ interface AppState {
 
   // Data import/export
   loadData: (data: { situations: Situation[]; scenarios: Scenario[] }) => void;
+  replaceData: (data: { situations: Situation[]; scenarios: Scenario[] }) => void;
 
   // UI
   setCompareMode: (v: boolean) => void;
@@ -153,10 +191,13 @@ export const useStore = create<AppState>()(
       compareMode: false,
 
       // ── Situations ──
-      addSituation: (s) => set((state) => ({ situations: [...state.situations, s] })),
+      addSituation: (s) =>
+        set((state) => ({ situations: [...state.situations, normalizeSituation(s)] })),
       updateSituation: (id, updates) =>
         set((state) => ({
-          situations: state.situations.map((s) => (s.id === id ? { ...s, ...updates } : s)),
+          situations: state.situations.map((s) =>
+            s.id === id ? normalizeSituation({ ...s, ...updates } as Situation) : s,
+          ),
         })),
       reorderSituations: (fromIndex, toIndex) =>
         set((state) => {
@@ -176,18 +217,17 @@ export const useStore = create<AppState>()(
 
       // ── Scenarios ──
       addScenario: (s) =>
-        set((state) => ({ scenarios: [...state.scenarios, s], activeScenarioId: s.id })),
+        set((state) => ({ scenarios: [...state.scenarios, normalizeScenario(s)], activeScenarioId: s.id })),
       updateScenario: (id, updates) =>
         set((state) => ({
-          scenarios: state.scenarios.map((s) => (s.id === id ? { ...s, ...updates } : s)),
+          scenarios: state.scenarios.map((s) =>
+            s.id === id ? normalizeScenario({ ...s, ...updates } as Scenario) : s,
+          ),
         })),
       deleteScenario: (id) =>
         set((state) => {
           const remaining = state.scenarios.filter((s) => s.id !== id);
-          const newActive =
-            state.activeScenarioId === id
-              ? (remaining[0]?.id ?? '')
-              : state.activeScenarioId;
+          const newActive = state.activeScenarioId === id ? (remaining[0]?.id ?? '') : state.activeScenarioId;
           return { scenarios: remaining, activeScenarioId: newActive };
         }),
       setActiveScenario: (id) => set({ activeScenarioId: id }),
@@ -234,25 +274,48 @@ export const useStore = create<AppState>()(
 
           return {
             scenarios: state.scenarios.map((s) =>
-              s.id === state.activeScenarioId
-                ? { ...s, entries: [...otherEntries, ...newEntries] }
-                : s,
+              s.id === state.activeScenarioId ? { ...s, entries: [...otherEntries, ...newEntries] } : s,
             ),
           };
         }),
 
-      loadData: ({ situations, scenarios }) =>
+      loadData: (data) => {
+        const normalized = normalizeData(data);
         set({
-          situations,
-          scenarios,
-          activeScenarioId: scenarios[0]?.id ?? '',
+          situations: normalized.situations,
+          scenarios: normalized.scenarios,
+          activeScenarioId: normalized.scenarios[0]?.id ?? '',
           compareMode: false,
-        }),
+        });
+      },
+
+      replaceData: (data) => {
+        const normalized = normalizeData(data);
+        set((state) => {
+          const activeStillExists = normalized.scenarios.some((sc) => sc.id === state.activeScenarioId);
+          return {
+            situations: normalized.situations,
+            scenarios: normalized.scenarios,
+            activeScenarioId: activeStillExists
+              ? state.activeScenarioId
+              : (normalized.scenarios[0]?.id ?? ''),
+          };
+        });
+      },
 
       setCompareMode: (v) => set({ compareMode: v }),
     }),
     {
       name: 'finance-simulator-v1',
+      version: 3,
+      migrate: (persistedState) => {
+        const state = (persistedState ?? {}) as Partial<AppState>;
+        return {
+          ...state,
+          situations: normalizeSituations((state.situations ?? sample.situations) as Situation[]),
+          scenarios: normalizeScenarios((state.scenarios ?? sample.scenarios) as Scenario[]),
+        };
+      },
     },
   ),
 );

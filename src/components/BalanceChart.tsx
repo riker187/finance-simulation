@@ -1,11 +1,14 @@
 import {
-  LineChart,
+  ComposedChart,
   Line,
+  Bar,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ReferenceLine,
+  ReferenceArea,
   ResponsiveContainer,
 } from 'recharts';
 import { useStore } from '../store';
@@ -22,10 +25,19 @@ function formatEur(n: number): string {
 }
 
 function buildChartData(
-  visibleScenarios: Scenario[],
+  activeScenario: Scenario,
+  overlayScenarios: Scenario[],
   situations: ReturnType<typeof useStore.getState>['situations'],
 ) {
-  type SimEntry = { scenario: Scenario; dataMap: Map<string, { balance: number; income: number; expenses: number; net: number }> };
+  const end = addMonths(activeScenario.startMonth, activeScenario.durationMonths - 1);
+  const axisMonths = monthsBetween(activeScenario.startMonth, end);
+
+  const visibleScenarios = [activeScenario, ...overlayScenarios];
+
+  type SimEntry = {
+    scenario: Scenario;
+    dataMap: Map<string, { balance: number; income: number; expenses: number; net: number }>;
+  };
 
   const sims: SimEntry[] = visibleScenarios.map((sc) => {
     const rows = simulateScenario(sc, situations);
@@ -33,35 +45,42 @@ function buildChartData(
     return { scenario: sc, dataMap };
   });
 
-  // Union of all months across all visible scenarios
-  const monthSet = new Set<string>();
-  for (const { scenario } of sims) {
-    const end = addMonths(scenario.startMonth, scenario.durationMonths - 1);
-    for (const m of monthsBetween(scenario.startMonth, end)) monthSet.add(m);
-  }
-  const allMonths = [...monthSet].sort();
+  const actualMap = new Map(activeScenario.savingsBalancePoints.map((p) => [p.month, p.balance]));
 
-  const chartData = allMonths.map((month) => {
-    const row: Record<string, string | number> = { month };
+  // IMPORTANT: use exactly the active scenario's month axis so Timeline and Chart are aligned.
+  const chartData = axisMonths.map((month) => {
+    const row: Record<string, string | number | undefined> = { month };
     for (const { scenario, dataMap } of sims) {
       const point = dataMap.get(month);
       if (point !== undefined) {
         row[scenario.id] = point.balance;
-        // Store detail fields under active scenario key prefix
         row[`${scenario.id}__income`] = point.income;
         row[`${scenario.id}__expenses`] = point.expenses;
         row[`${scenario.id}__net`] = point.net;
       }
     }
+    const actual = actualMap.get(month);
+    if (actual !== undefined) row.__actual = actual;
     return row;
   });
 
-  const allBalances = sims.flatMap(({ dataMap }) => [...dataMap.values()].map((d) => d.balance));
-  const minBalance = allBalances.length ? Math.min(...allBalances) : 0;
-  const maxBalance = allBalances.length ? Math.max(...allBalances) : 1000;
+  const allBalanceValues = chartData.flatMap((row) =>
+    visibleScenarios
+      .map((s) => row[s.id])
+      .filter((v): v is number => typeof v === 'number'),
+  );
+
+  const minBalance = allBalanceValues.length ? Math.min(...allBalanceValues) : 0;
+  const maxBalance = allBalanceValues.length ? Math.max(...allBalanceValues) : 1000;
   const padding = Math.max((maxBalance - minBalance) * 0.1, 500);
 
-  return { chartData, sims, minBalance, maxBalance, padding };
+  const activeNetValues = chartData
+    .map((row) => row[`${activeScenario.id}__net`])
+    .filter((v): v is number => typeof v === 'number');
+
+  const maxAbsTransfer = Math.max(500, ...activeNetValues.map((n) => Math.abs(n)));
+
+  return { chartData, minBalance, maxBalance, padding, maxAbsTransfer, visibleScenarios };
 }
 
 export function BalanceChart({ overlayScenarioIds }: Props) {
@@ -72,15 +91,18 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
   const activeScenario = scenarios.find((s) => s.id === activeScenarioId);
   if (!activeScenario) return null;
 
-  // Overlay scenarios that still exist (filter stale IDs)
   const overlayScenarios = overlayScenarioIds
     .filter((id) => id !== activeScenarioId)
     .map((id) => scenarios.find((s) => s.id === id))
     .filter((s): s is Scenario => s !== undefined);
 
-  const visibleScenarios = [activeScenario, ...overlayScenarios];
+  const { chartData, minBalance, maxBalance, padding, maxAbsTransfer, visibleScenarios } = buildChartData(
+    activeScenario,
+    overlayScenarios,
+    situations,
+  );
 
-  const { chartData, minBalance, maxBalance, padding } = buildChartData(visibleScenarios, situations);
+  const negativeFloor = Math.min(0, minBalance - padding);
 
   if (chartData.length === 0) {
     return (
@@ -90,7 +112,6 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
     );
   }
 
-  // Tooltip: full detail for active, balance-only for overlays
   const CustomTooltip = ({
     active,
     payload,
@@ -102,13 +123,21 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
   }) => {
     if (!active || !payload?.length || !label) return null;
 
-    // Sort: active scenario first
-    const sorted = [...payload].sort((a) => (a.dataKey === activeScenarioId ? -1 : 1));
+    const filtered = payload.filter((p) => !String(p.dataKey).endsWith('__net'));
+    const sorted = [...filtered].sort((a) => (a.dataKey === activeScenarioId ? -1 : 1));
     const row = chartData.find((d) => d.month === label);
 
     return (
-      <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 shadow-2xl text-xs space-y-2 min-w-[180px]">
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 shadow-2xl text-xs space-y-2 min-w-[220px]">
         <div className="text-slate-300 font-semibold text-sm">{formatMonthLong(label)}</div>
+
+        {row && typeof row.__actual === 'number' && (
+          <div className="flex justify-between gap-4 border-b border-slate-700 pb-1">
+            <span className="text-cyan-300">IST Tagesgeld</span>
+            <span className="text-cyan-300 font-semibold">{formatEur(row.__actual)}</span>
+          </div>
+        )}
+
         {sorted.map((entry) => {
           const sc = visibleScenarios.find((s) => s.id === entry.dataKey);
           if (!sc || entry.value == null) return null;
@@ -126,6 +155,9 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
                     {formatEur(entry.value)}
                   </span>
                 </div>
+                {entry.value < 0 && (
+                  <div className="text-red-300 text-[11px] font-medium">Kritischer Bereich: unter 0 EUR</div>
+                )}
                 {isActive && row && (
                   <>
                     <div className="flex justify-between gap-4">
@@ -137,12 +169,14 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
                       <span className="text-red-400">{formatEur(row[`${sc.id}__expenses`] as number)}</span>
                     </div>
                     <div className="flex justify-between gap-4 border-t border-slate-700 pt-0.5">
-                      <span className="text-slate-400">Netto</span>
+                      <span className="text-slate-300">Tagesgeld-Transfer</span>
                       {(() => {
                         const net = row[`${sc.id}__net`] as number;
+                        const positive = net >= 0;
                         return (
-                          <span className={net >= 0 ? 'text-green-400' : 'text-red-400'}>
-                            {net >= 0 ? '+' : ''}{formatEur(net)}
+                          <span className={positive ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>
+                            {positive ? '↗ + ' : '↘ - '}
+                            {formatEur(Math.abs(net))}
                           </span>
                         );
                       })()}
@@ -150,9 +184,7 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
                   </>
                 )}
               </div>
-              {overlayScenarios.length > 0 && !isActive && (
-                <div className="border-t border-slate-700/50 mt-1" />
-              )}
+              {overlayScenarios.length > 0 && !isActive && <div className="border-t border-slate-700/50 mt-1" />}
             </div>
           );
         })}
@@ -160,10 +192,20 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
     );
   };
 
+  const transferKey = `${activeScenarioId}__net`;
+
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full relative">
+      <div className="absolute right-2 top-0 z-10 pointer-events-none flex items-center gap-2">
+        <span className="text-[11px] px-2 py-1 rounded-md bg-red-950/80 border border-red-500/60 text-red-200">
+          Kritischer Bereich: Kontostand unter 0 EUR
+        </span>
+        <span className="text-[11px] px-2 py-1 rounded-md bg-slate-900/90 border border-slate-700 text-slate-300">
+          Balken = Monats-Transfer Tagesgeld
+        </span>
+      </div>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData} margin={{ top: 8, right: 24, left: 16, bottom: 8 }}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 24, left: 16, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
           <XAxis
             dataKey="month"
@@ -171,9 +213,10 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
             tick={{ fill: '#64748b', fontSize: 11 }}
             axisLine={{ stroke: '#1e293b' }}
             tickLine={false}
-            interval="preserveStartEnd"
+            interval={0}
           />
           <YAxis
+            yAxisId="balance"
             tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k€`}
             tick={{ fill: '#64748b', fontSize: 11 }}
             axisLine={false}
@@ -181,13 +224,39 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
             width={52}
             domain={[minBalance - padding, maxBalance + padding]}
           />
+          <YAxis
+            yAxisId="transfer"
+            orientation="right"
+            tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
+            tick={{ fill: '#64748b', fontSize: 10 }}
+            axisLine={false}
+            tickLine={false}
+            width={42}
+            domain={[-maxAbsTransfer, maxAbsTransfer]}
+          />
+          <ReferenceArea
+            yAxisId="balance"
+            y1={negativeFloor}
+            y2={0}
+            fill="#ef4444"
+            fillOpacity={0.12}
+            ifOverflow="extendDomain"
+          />
           <Tooltip content={<CustomTooltip />} />
-          <ReferenceLine y={0} stroke="#334155" strokeDasharray="4 4" />
+          <ReferenceLine yAxisId="balance" y={0} stroke="#ef4444" strokeDasharray="6 4" strokeWidth={2} />
 
-          {/* Overlay scenarios — thinner, behind the active line */}
+          <Bar yAxisId="transfer" dataKey={transferKey} barSize={10} maxBarSize={12} radius={[2, 2, 2, 2]}>
+            {chartData.map((entry, index) => {
+              const value = entry[transferKey];
+              const positive = typeof value === 'number' ? value >= 0 : true;
+              return <Cell key={`cell-${index}`} fill={positive ? '#22c55e' : '#ef4444'} fillOpacity={0.65} />;
+            })}
+          </Bar>
+
           {overlayScenarios.map((sc) => (
             <Line
               key={sc.id}
+              yAxisId="balance"
               type="monotone"
               dataKey={sc.id}
               stroke={sc.color}
@@ -199,8 +268,8 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
             />
           ))}
 
-          {/* Active scenario — bold, on top */}
           <Line
+            yAxisId="balance"
             key={activeScenarioId}
             type="monotone"
             dataKey={activeScenarioId}
@@ -210,7 +279,19 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
             activeDot={{ r: 5, fill: activeScenario.color, strokeWidth: 0 }}
             connectNulls={false}
           />
-        </LineChart>
+
+          <Line
+            yAxisId="balance"
+            type="linear"
+            dataKey="__actual"
+            stroke="#67e8f9"
+            strokeDasharray="4 4"
+            strokeWidth={2}
+            dot={{ r: 4, fill: '#67e8f9', strokeWidth: 0 }}
+            activeDot={{ r: 5, fill: '#67e8f9', strokeWidth: 0 }}
+            connectNulls={false}
+          />
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useStore } from '../store';
 import type { Situation, FinancialEffect, EffectType, EffectCategory } from '../types';
-import { SITUATION_COLORS } from '../types';
+import { SITUATION_COLORS, DEFAULT_SITUATION_CATEGORY, SITUATION_CATEGORY_SUGGESTIONS } from '../types';
+import { uid } from '../utils/uid';
 
 interface Props {
   initial?: Situation;
@@ -8,22 +10,52 @@ interface Props {
   onCancel: () => void;
 }
 
-function emptyEffect(): FinancialEffect {
+function emptyEffect(base?: Pick<FinancialEffect, 'type' | 'category'>): FinancialEffect {
   return {
-    id: crypto.randomUUID(),
+    id: uid(),
     label: '',
-    type: 'recurring',
-    category: 'income',
+    type: base?.type ?? 'recurring',
+    category: base?.category ?? 'income',
     amount: 0,
   };
 }
 
 export function SituationForm({ initial, onSave, onCancel }: Props) {
+  const situations = useStore((s) => s.situations);
+
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
+  const [category, setCategory] = useState(initial?.category ?? DEFAULT_SITUATION_CATEGORY);
   const [color, setColor] = useState(initial?.color ?? SITUATION_COLORS[0]);
   const [effects, setEffects] = useState<FinancialEffect[]>(
     initial?.effects.length ? initial.effects : [emptyEffect()],
+  );
+
+  const categorySuggestions = useMemo(() => {
+    const existing = situations
+      .map((s) => s.category?.trim())
+      .filter((c): c is string => Boolean(c));
+
+    const merged = [
+      ...existing,
+      ...SITUATION_CATEGORY_SUGGESTIONS,
+      category.trim() || DEFAULT_SITUATION_CATEGORY,
+    ];
+
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    for (const entry of merged) {
+      const key = entry.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(entry);
+    }
+    return unique;
+  }, [situations, category]);
+
+  const existingCategories = useMemo(
+    () => categorySuggestions.filter((c) => c !== DEFAULT_SITUATION_CATEGORY),
+    [categorySuggestions],
   );
 
   useEffect(() => {
@@ -42,6 +74,14 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
     setEffects((prev) => prev.filter((e) => e.id !== id));
   };
 
+  const addEffect = () => {
+    setEffects((prev) => {
+      const last = prev.at(-1);
+      const base = last ? { type: last.type, category: last.category } : undefined;
+      return [...prev, emptyEffect(base)];
+    });
+  };
+
   const handleSave = () => {
     if (!name.trim()) return;
     const validEffects = effects
@@ -51,9 +91,10 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
         label: e.label.trim() || (e.category === 'income' ? 'Einnahme' : 'Ausgabe'),
       }));
     onSave({
-      id: initial?.id ?? crypto.randomUUID(),
+      id: initial?.id ?? uid(),
       name: name.trim(),
       description: description.trim(),
+      category: category.trim() || DEFAULT_SITUATION_CATEGORY,
       color,
       effects: validEffects,
     });
@@ -87,6 +128,38 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Kurze Beschreibung"
           />
+        </div>
+
+        {/* Category */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Kategorie</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <select
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+              value=""
+              onChange={(e) => {
+                if (e.target.value) setCategory(e.target.value);
+              }}
+            >
+              <option value="">Vorhandene Kategorie wählen...</option>
+              {existingCategories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+
+            <input
+              list="situation-categories"
+              className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="Oder neue Kategorie eingeben"
+            />
+          </div>
+          <datalist id="situation-categories">
+            {categorySuggestions.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
         </div>
 
         {/* Color */}
@@ -143,7 +216,7 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
                   placeholder="0"
                   min="0"
                 />
-                <span className="text-slate-500 text-xs">€</span>
+                <span className="text-slate-500 text-xs">EUR</span>
                 <button
                   className="text-slate-600 hover:text-red-400 transition-colors"
                   onClick={() => removeEffect(effect.id)}
@@ -155,9 +228,9 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
           </div>
           <button
             className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-            onClick={() => setEffects((prev) => [...prev, emptyEffect()])}
+            onClick={addEffect}
           >
-            + Auswirkung hinzufügen
+            + Auswirkung hinzufuegen
           </button>
         </div>
 

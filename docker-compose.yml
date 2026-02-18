@@ -1,6 +1,20 @@
 services:
+  sync:
+    image: node:20-alpine
+    working_dir: /app
+    command: ["node", "sync-server/server.js"]
+    volumes:
+      - ./sync-server:/app/sync-server:ro
+      - sync_data:/data
+    restart: unless-stopped
+
   app:
     build: .
+    depends_on:
+      - sync
     ports:
       - "${HOST_PORT:-3000}:80"
     restart: unless-stopped
+
+volumes:
+  sync_data:
