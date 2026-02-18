@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Situation, Scenario, ScenarioEntry, ScenarioEffectEntry } from './types';
 import { DEFAULT_SITUATION_CATEGORY } from './types';
-import { currentMonth, addMonths, monthsToRanges, rangeToMonths } from './utils/months';
+import { currentMonth, addMonths, monthsToRanges, rangeToMonths, formatMonthShort } from './utils/months';
 import { uid } from './utils/uid';
 import { logAuditEntry, logDebounced } from './utils/auditLog';
 
@@ -320,13 +320,37 @@ export const useStore = create<AppState>()(
             if (updates.name !== undefined && updates.name !== old.name)
               changed.push(`Name: "${old.name}" → "${updates.name}"`);
             if (updates.category !== undefined && updates.category !== old.category)
-              changed.push('Kategorie geändert');
+              changed.push(`Kategorie: "${old.category}" → "${updates.category}"`);
             if (updates.description !== undefined && updates.description !== old.description)
               changed.push('Beschreibung geändert');
-            if (updates.effects !== undefined && updates.effects !== old.effects)
-              changed.push('Effekte geändert');
             if (updates.color !== undefined && updates.color !== old.color)
               changed.push('Farbe geändert');
+            if (updates.effects !== undefined) {
+              // Deep-compare effects by content, not reference
+              const newEffects = updates.effects;
+              const effectChanges: string[] = [];
+              for (const ne of newEffects) {
+                const oe = old.effects.find((e) => e.id === ne.id);
+                if (!oe) {
+                  effectChanges.push(`+ "${ne.label || 'Effekt'}" ${ne.amount} €`);
+                } else if (
+                  oe.amount !== ne.amount ||
+                  oe.label !== ne.label ||
+                  oe.type !== ne.type ||
+                  oe.category !== ne.category
+                ) {
+                  if (oe.amount !== ne.amount)
+                    effectChanges.push(`"${ne.label || 'Effekt'}": ${oe.amount} → ${ne.amount} €`);
+                  else
+                    effectChanges.push(`"${ne.label || 'Effekt'}" geändert`);
+                }
+              }
+              for (const oe of old.effects) {
+                if (!newEffects.find((e) => e.id === oe.id))
+                  effectChanges.push(`− "${oe.label || 'Effekt'}"`);
+              }
+              if (effectChanges.length > 0) changed.push(effectChanges.join(', '));
+            }
             if (changed.length > 0)
               logAuditEntry(`Situation "${updates.name ?? old.name}" bearbeitet`, changed.join(' · '));
           }
@@ -399,10 +423,18 @@ export const useStore = create<AppState>()(
           const sit = state.situations.find((s) => s.id === situationId);
           if (scenario && sit) {
             const verb = mode === 'add' ? 'eingetragen' : 'entfernt';
+            const ranges = monthsToRanges(paintedMonths);
+            const rangeStr = ranges
+              .map((r) =>
+                r.startMonth === r.endMonth
+                  ? formatMonthShort(r.startMonth)
+                  : `${formatMonthShort(r.startMonth)}–${formatMonthShort(r.endMonth)}`,
+              )
+              .join(', ');
             logDebounced(
               `paint-entries-${state.activeScenarioId}-${situationId}`,
-              `Zeitplan geändert – "${sit.name}" ${verb}`,
-              `Szenario: "${scenario.name}", ${paintedMonths.length} Monat(e)`,
+              `Zeitplan – "${sit.name}" ${verb}`,
+              `Szenario: "${scenario.name}" · ${rangeStr}`,
             );
           }
           if (!scenario) return {};
@@ -473,10 +505,18 @@ export const useStore = create<AppState>()(
           if (scenario && sit) {
             const verb = mode === 'add' ? 'aktiviert' : 'deaktiviert';
             const effectName = effect?.label ?? sit.name;
+            const ranges = monthsToRanges(paintedMonths);
+            const rangeStr = ranges
+              .map((r) =>
+                r.startMonth === r.endMonth
+                  ? formatMonthShort(r.startMonth)
+                  : `${formatMonthShort(r.startMonth)}–${formatMonthShort(r.endMonth)}`,
+              )
+              .join(', ');
             logDebounced(
               `paint-effect-${state.activeScenarioId}-${situationId}-${effectId}`,
               `Effekt "${effectName}" ${verb}`,
-              `Szenario: "${scenario.name}"`,
+              `Szenario: "${scenario.name}" · ${rangeStr}`,
             );
           }
           if (!scenario) return {};
