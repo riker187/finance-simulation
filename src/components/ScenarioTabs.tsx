@@ -29,6 +29,7 @@ function ScenarioFormModal({
       startMonth,
       durationMonths: Math.max(1, durationMonths),
       entries: initial?.entries ?? [],
+      effectEntries: initial?.effectEntries ?? [],
       savingsBalancePoints: initial?.savingsBalancePoints ?? [],
     });
   };
@@ -142,6 +143,7 @@ export function ScenarioTabs() {
       id: uid(),
       name: `Kopie von ${sc.name}`,
       entries: sc.entries.map((e) => ({ ...e, id: uid() })),
+      effectEntries: sc.effectEntries.map((e) => ({ ...e, id: uid() })),
       savingsBalancePoints: sc.savingsBalancePoints.map((p) => ({ ...p, id: uid() })),
     };
     addScenario(copy);
@@ -164,7 +166,6 @@ export function ScenarioTabs() {
             {sc.name}
           </button>
 
-          {/* Context actions on hover */}
           {sc.id === activeScenarioId && (
             <div className="absolute -top-1 -right-1 hidden group-hover:flex gap-0.5">
               <button
@@ -202,7 +203,6 @@ export function ScenarioTabs() {
         + Szenario
       </button>
 
-      {/* Delete confirm dialog */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4 max-w-sm w-full mx-4">

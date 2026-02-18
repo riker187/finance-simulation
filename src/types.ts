@@ -35,6 +35,14 @@ export interface ScenarioEntry {
   endMonth: string; // 'YYYY-MM' (inclusive)
 }
 
+export interface ScenarioEffectEntry {
+  id: string;
+  situationId: string;
+  effectId: string;
+  startMonth: string; // 'YYYY-MM'
+  endMonth: string; // 'YYYY-MM' (inclusive)
+}
+
 export interface SavingsBalancePoint {
   id: string;
   month: string; // 'YYYY-MM'
@@ -49,6 +57,7 @@ export interface Scenario {
   startMonth: string; // 'YYYY-MM'
   durationMonths: number;
   entries: ScenarioEntry[];
+  effectEntries: ScenarioEffectEntry[];
   savingsBalancePoints: SavingsBalancePoint[];
 }
 

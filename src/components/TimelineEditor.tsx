@@ -1,30 +1,42 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useStore } from '../store';
+import type { FinancialEffect } from '../types';
 import { DEFAULT_SITUATION_CATEGORY } from '../types';
 import { addMonths, monthsBetween, formatMonthShort, sortMonths } from '../utils/months';
 
-const CELL_W = 56; // px per month cell
-const CELL_H = 36; // px per row
-const LABEL_W = 210; // px for situation name column
+const CELL_W = 56;
+const CELL_H = 36;
+const EFFECT_CELL_H = 30;
+const LABEL_W = 210;
+
+type PaintTarget =
+  | { kind: 'situation'; situationId: string }
+  | { kind: 'effect'; situationId: string; effectId: string };
+
+function targetKey(target: PaintTarget): string {
+  return target.kind === 'situation'
+    ? `s:${target.situationId}`
+    : `e:${target.situationId}:${target.effectId}`;
+}
 
 export function TimelineEditor() {
   const situations = useStore((s) => s.situations);
   const scenarios = useStore((s) => s.scenarios);
   const activeScenarioId = useStore((s) => s.activeScenarioId);
   const paintEntries = useStore((s) => s.paintEntries);
+  const paintEffectEntries = useStore((s) => s.paintEffectEntries);
   const reorderSituations = useStore((s) => s.reorderSituations);
 
   const scenario = scenarios.find((s) => s.id === activeScenarioId);
 
-  // Paint state
   const [isPainting, setIsPainting] = useState(false);
   const [paintMode, setPaintMode] = useState<'add' | 'remove'>('add');
-  const [paintSitId, setPaintSitId] = useState<string | null>(null);
+  const [paintTarget, setPaintTarget] = useState<PaintTarget | null>(null);
   const [paintAnchor, setPaintAnchor] = useState<string | null>(null);
   const [paintCurrent, setPaintCurrent] = useState<string | null>(null);
-  const [hoverCell, setHoverCell] = useState<{ sitId: string; month: string } | null>(null);
+  const [hoverCell, setHoverCell] = useState<{ target: string; month: string } | null>(null);
+  const [expandedSituations, setExpandedSituations] = useState<Set<string>>(() => new Set());
 
-  // Drag-to-reorder state
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
 
@@ -51,11 +63,10 @@ export function TimelineEditor() {
 
   const isPaintingRef = useRef(false);
   const paintModeRef = useRef<'add' | 'remove'>('add');
-  const paintSitIdRef = useRef<string | null>(null);
+  const paintTargetRef = useRef<PaintTarget | null>(null);
   const paintAnchorRef = useRef<string | null>(null);
   const paintCurrentRef = useRef<string | null>(null);
 
-  // Keep refs in sync with state (needed for document mouseup handler)
   useEffect(() => {
     isPaintingRef.current = isPainting;
   }, [isPainting]);
@@ -63,8 +74,8 @@ export function TimelineEditor() {
     paintModeRef.current = paintMode;
   }, [paintMode]);
   useEffect(() => {
-    paintSitIdRef.current = paintSitId;
-  }, [paintSitId]);
+    paintTargetRef.current = paintTarget;
+  }, [paintTarget]);
   useEffect(() => {
     paintAnchorRef.current = paintAnchor;
   }, [paintAnchor]);
@@ -73,22 +84,27 @@ export function TimelineEditor() {
   }, [paintCurrent]);
 
   const commitPaint = useCallback(() => {
-    const sitId = paintSitIdRef.current;
+    const target = paintTargetRef.current;
     const anchor = paintAnchorRef.current;
     const current = paintCurrentRef.current ?? anchor;
-    if (!sitId || !anchor || !current) return;
+    if (!target || !anchor || !current) return;
 
     const [start, end] = sortMonths(anchor, current);
     const months = monthsBetween(start, end);
-    paintEntries(sitId, months, paintModeRef.current);
-  }, [paintEntries]);
+
+    if (target.kind === 'situation') {
+      paintEntries(target.situationId, months, paintModeRef.current);
+    } else {
+      paintEffectEntries(target.situationId, target.effectId, months, paintModeRef.current);
+    }
+  }, [paintEntries, paintEffectEntries]);
 
   useEffect(() => {
     const handleMouseUp = () => {
       if (isPaintingRef.current) {
         commitPaint();
         setIsPainting(false);
-        setPaintSitId(null);
+        setPaintTarget(null);
         setPaintAnchor(null);
         setPaintCurrent(null);
       }
@@ -109,72 +125,97 @@ export function TimelineEditor() {
   const months = monthsBetween(scenario.startMonth, endMonth);
 
   const groupedSituations = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; color: string; index: number }[]>();
+    const map = new Map<
+      string,
+      { id: string; name: string; color: string; effects: FinancialEffect[]; index: number }[]
+    >();
+
     situations.forEach((sit, index) => {
       const category = sit.category?.trim() || DEFAULT_SITUATION_CATEGORY;
       const group = map.get(category);
-      const item = { id: sit.id, name: sit.name, color: sit.color, index };
+      const item = { id: sit.id, name: sit.name, color: sit.color, effects: sit.effects, index };
       if (group) {
         group.push(item);
       } else {
         map.set(category, [item]);
       }
     });
+
     return [...map.entries()];
   }, [situations]);
 
-  // For each situation, compute committed active months
-  const getActiveMonths = (sitId: string): Set<string> => {
+  const getSituationActiveMonths = (situationId: string): Set<string> => {
     const set = new Set<string>();
     for (const entry of scenario.entries) {
-      if (entry.situationId !== sitId) continue;
-      for (const m of monthsBetween(entry.startMonth, entry.endMonth)) {
-        if (m >= scenario.startMonth && m <= endMonth) set.add(m);
+      if (entry.situationId !== situationId) continue;
+      for (const month of monthsBetween(entry.startMonth, entry.endMonth)) {
+        if (month >= scenario.startMonth && month <= endMonth) set.add(month);
       }
     }
     return set;
   };
 
-  // Compute preview active state (including in-progress paint)
-  const isCellActive = (sitId: string, month: string, committed: Set<string>): boolean => {
-    if (!isPainting || paintSitId !== sitId || !paintAnchor || !paintCurrent) {
+  const getEffectDisabledMonths = (situationId: string, effectId: string): Set<string> => {
+    const set = new Set<string>();
+    for (const entry of scenario.effectEntries) {
+      if (entry.situationId !== situationId || entry.effectId !== effectId) continue;
+      for (const month of monthsBetween(entry.startMonth, entry.endMonth)) {
+        if (month >= scenario.startMonth && month <= endMonth) set.add(month);
+      }
+    }
+    return set;
+  };
+
+  const isCellActive = (target: PaintTarget, month: string, committed: Set<string>): boolean => {
+    if (!isPainting || !paintTarget || !paintAnchor || !paintCurrent || targetKey(paintTarget) !== targetKey(target)) {
       return committed.has(month);
     }
+
     const [start, end] = sortMonths(paintAnchor, paintCurrent);
     const inRange = month >= start && month <= end;
     if (paintMode === 'add') return committed.has(month) || inRange;
     return committed.has(month) && !inRange;
   };
 
-  const handleCellMouseDown = (sitId: string, month: string, committed: Set<string>) => {
+  const startPaint = (target: PaintTarget, month: string, committed: Set<string>) => {
     const active = committed.has(month);
     setIsPainting(true);
     setPaintMode(active ? 'remove' : 'add');
-    setPaintSitId(sitId);
+    setPaintTarget(target);
     setPaintAnchor(month);
     setPaintCurrent(month);
   };
 
-  const handleCellMouseEnter = (sitId: string, month: string) => {
-    setHoverCell({ sitId, month });
-    if (isPainting && paintSitId === sitId) {
+  const handleCellMouseEnter = (target: PaintTarget, month: string) => {
+    setHoverCell({ target: targetKey(target), month });
+    if (isPainting && paintTarget && targetKey(paintTarget) === targetKey(target)) {
       setPaintCurrent(month);
     }
   };
 
-  // Month header grouping: show year label when month is January
+  const toggleExpanded = (situationId: string) => {
+    setExpandedSituations((prev) => {
+      const next = new Set(prev);
+      if (next.has(situationId)) {
+        next.delete(situationId);
+      } else {
+        next.add(situationId);
+      }
+      return next;
+    });
+  };
+
   const yearLabels: { index: number; year: number }[] = [];
-  months.forEach((m, i) => {
-    const year = parseInt(m.split('-')[0]);
-    if (i === 0 || parseInt(months[i - 1].split('-')[0]) !== year) {
-      yearLabels.push({ index: i, year });
+  months.forEach((month, index) => {
+    const year = parseInt(month.split('-')[0], 10);
+    if (index === 0 || parseInt(months[index - 1].split('-')[0], 10) !== year) {
+      yearLabels.push({ index, year });
     }
   });
 
   return (
     <div className="select-none" onMouseLeave={() => setHoverCell(null)}>
       <div style={{ minWidth: LABEL_W + months.length * CELL_W }}>
-        {/* Sticky header (year + month row remain visible while scrolling) */}
         <div className="sticky top-0 z-20 bg-slate-950 border-b border-slate-800">
           <div className="flex" style={{ height: 20 }}>
             <div style={{ width: LABEL_W }} />
@@ -198,19 +239,18 @@ export function TimelineEditor() {
             >
               Situation
             </div>
-            {months.map((m) => (
+            {months.map((month) => (
               <div
-                key={m}
+                key={month}
                 className="shrink-0 flex items-center justify-center text-xs text-slate-500 border-l border-slate-800"
                 style={{ width: CELL_W }}
               >
-                {formatMonthShort(m)}
+                {formatMonthShort(month)}
               </div>
             ))}
           </div>
         </div>
 
-        {/* Situation rows */}
         {situations.length === 0 && (
           <div className="py-8 text-center text-slate-600 text-sm">
             Erstelle zuerst Situationen in der linken Seitenleiste.
@@ -230,99 +270,225 @@ export function TimelineEditor() {
             </div>
 
             {rows.map((sit) => {
-              const committed = getActiveMonths(sit.id);
+              const committed = getSituationActiveMonths(sit.id);
+              const rowTarget: PaintTarget = { kind: 'situation', situationId: sit.id };
+              const rowTargetKey = targetKey(rowTarget);
               const isDragging = dragIndex === sit.index;
               const isDropTarget = dropIndex === sit.index && dragIndex !== null && dragIndex !== sit.index;
+              const isExpanded = expandedSituations.has(sit.id);
+
+              const effectOverrides = sit.effects
+                .map((effect) => ({ effectId: effect.id, months: getEffectDisabledMonths(sit.id, effect.id) }))
+                .filter((item) => item.months.size > 0);
+
+              const hasAnyEffectOverrides = effectOverrides.length > 0;
+              const customizedMonths = new Set<string>();
+
+              for (const item of effectOverrides) {
+                for (const month of item.months) {
+                  if (committed.has(month)) customizedMonths.add(month);
+                }
+              }
 
               return (
-                <div
-                  key={sit.id}
-                  className={`flex border-b transition-colors ${
-                    isDragging
-                      ? 'opacity-30 border-slate-800/50'
-                      : isDropTarget
-                      ? 'border-t-2 border-blue-500 bg-blue-500/5'
-                      : 'border-slate-800/50 hover:bg-slate-800/20'
-                  }`}
-                  style={{ height: CELL_H }}
-                  onDragOver={(e) => handleDragOver(e, sit.index)}
-                  onDrop={(e) => handleDrop(e, sit.index)}
-                >
-                  {/* Situation label - draggable */}
+                <div key={sit.id}>
                   <div
-                    className="shrink-0 flex items-center gap-2 px-2 cursor-grab active:cursor-grabbing"
-                    style={{ width: LABEL_W }}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, sit.index)}
-                    onDragEnd={handleDragEnd}
+                    className={`flex border-b transition-colors ${
+                      isDragging
+                        ? 'opacity-30 border-slate-800/50'
+                        : isDropTarget
+                        ? 'border-t-2 border-blue-500 bg-blue-500/5'
+                        : 'border-slate-800/50 hover:bg-slate-800/20'
+                    }`}
+                    style={{ height: CELL_H }}
+                    onDragOver={(e) => handleDragOver(e, sit.index)}
+                    onDrop={(e) => handleDrop(e, sit.index)}
                   >
-                    <span
-                      className="text-slate-600 hover:text-slate-400 text-xs shrink-0 leading-none"
-                      title="Verschieben"
+                    <div
+                      className="shrink-0 flex items-center gap-2 px-2 cursor-grab active:cursor-grabbing"
+                      style={{ width: LABEL_W }}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, sit.index)}
+                      onDragEnd={handleDragEnd}
                     >
-                      ⠿
-                    </span>
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: sit.color }} />
-                    <span className="text-xs text-slate-300 truncate">{sit.name}</span>
+                      <span className="text-slate-600 hover:text-slate-400 text-xs shrink-0 leading-none" title="Verschieben">
+                        ⠿
+                      </span>
+                      {sit.effects.length > 0 ? (
+                        <button
+                          className="text-slate-500 hover:text-slate-200 text-[11px] leading-none w-4"
+                          onClick={() => toggleExpanded(sit.id)}
+                          title={isExpanded ? 'Auswirkungen einklappen' : 'Auswirkungen aufklappen'}
+                        >
+                          {isExpanded ? '▾' : '▸'}
+                        </button>
+                      ) : (
+                        <span className="w-4" />
+                      )}
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: sit.color }} />
+                      <span className="text-xs text-slate-300 truncate">{sit.name}</span>
+                      {hasAnyEffectOverrides && (
+                        <span className="text-[10px] text-blue-300 border border-blue-400/40 rounded px-1 py-0.5">
+                          individuell
+                        </span>
+                      )}
+                    </div>
+
+                    {months.map((month) => {
+                      const active = isCellActive(rowTarget, month, committed);
+                      const isHovered = hoverCell?.target === rowTargetKey && hoverCell?.month === month;
+                      const isPaintingThisCell =
+                        isPainting &&
+                        paintTarget &&
+                        targetKey(paintTarget) === rowTargetKey &&
+                        paintAnchor &&
+                        paintCurrent &&
+                        month >= sortMonths(paintAnchor, paintCurrent)[0] &&
+                        month <= sortMonths(paintAnchor, paintCurrent)[1];
+
+                      return (
+                        <div
+                          key={month}
+                          className="shrink-0 relative border-l border-slate-800/50 cursor-crosshair"
+                          style={{ width: CELL_W, height: CELL_H }}
+                          onMouseDown={() => startPaint(rowTarget, month, committed)}
+                          onMouseEnter={() => handleCellMouseEnter(rowTarget, month)}
+                        >
+                          {active && (
+                            <div
+                              className="absolute inset-y-1 inset-x-0.5 rounded transition-opacity"
+                              style={{
+                                backgroundColor: sit.color,
+                                opacity: isPaintingThisCell && paintMode === 'remove' ? 0.25 : 0.75,
+                              }}
+                            />
+                          )}
+                          {!active && isPaintingThisCell && paintMode === 'add' && (
+                            <div
+                              className="absolute inset-y-1 inset-x-0.5 rounded"
+                              style={{ backgroundColor: sit.color, opacity: 0.5 }}
+                            />
+                          )}
+                          {!active && !isPainting && isHovered && (
+                            <div
+                              className="absolute inset-y-1 inset-x-0.5 rounded border border-dashed"
+                              style={{ borderColor: sit.color, opacity: 0.4 }}
+                            />
+                          )}
+                          {customizedMonths.has(month) && (
+                            <div
+                              className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-300 border border-slate-900"
+                              title="In diesem Monat gibt es individuelle Effekt-Anpassungen"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
 
-                  {/* Month cells */}
-                  {months.map((month) => {
-                    const active = isCellActive(sit.id, month, committed);
-                    const isHovered = hoverCell?.sitId === sit.id && hoverCell?.month === month;
-                    const isPaintingThisCell =
-                      isPainting &&
-                      paintSitId === sit.id &&
-                      paintAnchor &&
-                      paintCurrent &&
-                      month >= sortMonths(paintAnchor, paintCurrent)[0] &&
-                      month <= sortMonths(paintAnchor, paintCurrent)[1];
+                  {isExpanded &&
+                    sit.effects.map((effect) => {
+                      const disabledMonths = getEffectDisabledMonths(sit.id, effect.id);
+                      const committedEffect = new Set([...committed].filter((month) => !disabledMonths.has(month)));
+                      const effectTarget: PaintTarget = {
+                        kind: 'effect',
+                        situationId: sit.id,
+                        effectId: effect.id,
+                      };
+                      const effectTargetKey = targetKey(effectTarget);
 
-                    return (
-                      <div
-                        key={month}
-                        className="shrink-0 relative border-l border-slate-800/50 cursor-crosshair"
-                        style={{ width: CELL_W, height: CELL_H }}
-                        onMouseDown={() => handleCellMouseDown(sit.id, month, committed)}
-                        onMouseEnter={() => handleCellMouseEnter(sit.id, month)}
-                      >
-                        {/* Active fill */}
-                        {active && (
+                      return (
+                        <div
+                          key={effect.id}
+                          className="flex border-b border-slate-800/40 bg-slate-900/40 hover:bg-slate-800/20"
+                          style={{ height: EFFECT_CELL_H }}
+                        >
                           <div
-                            className="absolute inset-y-1 inset-x-0.5 rounded transition-opacity"
-                            style={{
-                              backgroundColor: sit.color,
-                              opacity: isPaintingThisCell && paintMode === 'remove' ? 0.25 : 0.75,
-                            }}
-                          />
-                        )}
-                        {/* Paint preview for add mode */}
-                        {!active && isPaintingThisCell && paintMode === 'add' && (
-                          <div
-                            className="absolute inset-y-1 inset-x-0.5 rounded"
-                            style={{ backgroundColor: sit.color, opacity: 0.5 }}
-                          />
-                        )}
-                        {/* Hover highlight for empty cells */}
-                        {!active && !isPainting && isHovered && (
-                          <div
-                            className="absolute inset-y-1 inset-x-0.5 rounded border border-dashed"
-                            style={{ borderColor: sit.color, opacity: 0.4 }}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
+                            className="shrink-0 flex items-center gap-2 pl-8 pr-2"
+                            style={{ width: LABEL_W }}
+                            title={
+                              disabledMonths.size > 0
+                                ? 'In einzelnen Monaten deaktiviert'
+                                : 'Folgt aktuell der Situation'
+                            }
+                          >
+                            <span
+                              className="text-[11px] font-medium"
+                              style={{ color: effect.category === 'income' ? '#22c55e' : '#fb7185' }}
+                            >
+                              {effect.category === 'income' ? '+' : '-'}
+                            </span>
+                            <span className="text-[11px] text-slate-400 truncate">{effect.label || 'Auswirkung'}</span>
+                            {disabledMonths.size > 0 && (
+                              <span className="text-[10px] text-blue-300 border border-blue-400/40 rounded px-1 py-0.5">
+                                individuell
+                              </span>
+                            )}
+                          </div>
+
+                          {months.map((month) => {
+                            const situationIsActive = committed.has(month);
+                            const active = isCellActive(effectTarget, month, committedEffect);
+                            const isHovered = hoverCell?.target === effectTargetKey && hoverCell?.month === month;
+                            const isPaintingThisCell =
+                              isPainting &&
+                              paintTarget &&
+                              targetKey(paintTarget) === effectTargetKey &&
+                              paintAnchor &&
+                              paintCurrent &&
+                              month >= sortMonths(paintAnchor, paintCurrent)[0] &&
+                              month <= sortMonths(paintAnchor, paintCurrent)[1];
+
+                            return (
+                              <div
+                                key={month}
+                                className={`shrink-0 relative border-l border-slate-800/40 ${
+                                  situationIsActive ? 'cursor-crosshair' : 'cursor-not-allowed'
+                                }`}
+                                style={{ width: CELL_W, height: EFFECT_CELL_H }}
+                                onMouseDown={() => {
+                                  if (!situationIsActive) return;
+                                  startPaint(effectTarget, month, committedEffect);
+                                }}
+                                onMouseEnter={() => handleCellMouseEnter(effectTarget, month)}
+                              >
+                                {!situationIsActive && <div className="absolute inset-0 bg-slate-900/60" />}
+                                {situationIsActive && active && (
+                                  <div
+                                    className="absolute inset-y-1 inset-x-1 rounded transition-opacity"
+                                    style={{
+                                      backgroundColor: sit.color,
+                                      opacity: isPaintingThisCell && paintMode === 'remove' ? 0.2 : 0.55,
+                                    }}
+                                  />
+                                )}
+                                {situationIsActive && !active && isPaintingThisCell && paintMode === 'add' && (
+                                  <div
+                                    className="absolute inset-y-1 inset-x-1 rounded"
+                                    style={{ backgroundColor: sit.color, opacity: 0.4 }}
+                                  />
+                                )}
+                                {situationIsActive && !active && !isPainting && isHovered && (
+                                  <div
+                                    className="absolute inset-y-1 inset-x-1 rounded border border-dashed"
+                                    style={{ borderColor: sit.color, opacity: 0.35 }}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
                 </div>
               );
             })}
           </div>
         ))}
 
-        {/* Hint */}
         {situations.length > 0 && (
           <div className="px-4 py-2 text-xs text-slate-600 italic">
-            Klicken & Ziehen auf Monate zum Aktivieren/Deaktivieren · ⠿ Zeilen verschieben zum Umsortieren.
+            Situationen: klicken & ziehen zum Aktivieren/Deaktivieren · ▸ Auswirkungen aufklappen und bei Bedarf einzeln steuern.
           </div>
         )}
       </div>

@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Situation, Scenario, ScenarioEntry } from './types';
+import type { Situation, Scenario, ScenarioEntry, ScenarioEffectEntry } from './types';
 import { DEFAULT_SITUATION_CATEGORY } from './types';
-import { currentMonth, addMonths, monthsToRanges, rangeToMonths, sortMonths } from './utils/months';
+import { currentMonth, addMonths, monthsToRanges, rangeToMonths } from './utils/months';
 import { uid } from './utils/uid';
 
 function normalizeSituation(s: Situation): Situation {
@@ -20,6 +20,7 @@ function normalizeSituations(situations: Situation[]): Situation[] {
 function normalizeScenario(sc: Scenario): Scenario {
   return {
     ...sc,
+    effectEntries: Array.isArray(sc.effectEntries) ? sc.effectEntries : [],
     savingsBalancePoints: Array.isArray(sc.savingsBalancePoints) ? sc.savingsBalancePoints : [],
   };
 }
@@ -33,6 +34,94 @@ function normalizeData(data: { situations: Situation[]; scenarios: Scenario[] })
     situations: normalizeSituations(data.situations),
     scenarios: normalizeScenarios(data.scenarios),
   };
+}
+
+
+function convertLegacyEffectEntriesToDisabled(scenarios: Scenario[]): Scenario[] {
+  return scenarios.map((scenario) => {
+    if (!Array.isArray(scenario.effectEntries) || scenario.effectEntries.length === 0) {
+      return scenario;
+    }
+
+    const situationActiveMonths = new Map<string, Set<string>>();
+    for (const entry of scenario.entries) {
+      let set = situationActiveMonths.get(entry.situationId);
+      if (!set) {
+        set = new Set<string>();
+        situationActiveMonths.set(entry.situationId, set);
+      }
+      for (const month of rangeToMonths(entry.startMonth, entry.endMonth)) {
+        set.add(month);
+      }
+    }
+
+    const grouped = new Map<string, ScenarioEffectEntry[]>();
+    for (const entry of scenario.effectEntries) {
+      const key = `${entry.situationId}::${entry.effectId}`;
+      const list = grouped.get(key);
+      if (list) {
+        list.push(entry);
+      } else {
+        grouped.set(key, [entry]);
+      }
+    }
+
+    const disabledEntries: ScenarioEffectEntry[] = [];
+
+    for (const [key, entries] of grouped.entries()) {
+      const [situationId, effectId] = key.split('::');
+      const activeSituation = situationActiveMonths.get(situationId) ?? new Set<string>();
+      const legacyActiveOverride = activeMonthsFromEntries(entries);
+
+      const disabledMonths = new Set<string>();
+      for (const month of activeSituation) {
+        if (!legacyActiveOverride.has(month)) {
+          disabledMonths.add(month);
+        }
+      }
+
+      disabledEntries.push(...toScenarioEffectEntries(situationId, effectId, disabledMonths));
+    }
+
+    return {
+      ...scenario,
+      effectEntries: disabledEntries,
+    };
+  });
+}
+function activeMonthsFromEntries(entries: { startMonth: string; endMonth: string }[]): Set<string> {
+  const set = new Set<string>();
+  for (const entry of entries) {
+    for (const month of rangeToMonths(entry.startMonth, entry.endMonth)) {
+      set.add(month);
+    }
+  }
+  return set;
+}
+
+function toScenarioEntries(situationId: string, months: Set<string>): ScenarioEntry[] {
+  const ranges = monthsToRanges([...months]);
+  return ranges.map((range) => ({
+    id: uid(),
+    situationId,
+    startMonth: range.startMonth,
+    endMonth: range.endMonth,
+  }));
+}
+
+function toScenarioEffectEntries(
+  situationId: string,
+  effectId: string,
+  months: Set<string>,
+): ScenarioEffectEntry[] {
+  const ranges = monthsToRanges([...months]);
+  return ranges.map((range) => ({
+    id: uid(),
+    situationId,
+    effectId,
+    startMonth: range.startMonth,
+    endMonth: range.endMonth,
+  }));
 }
 
 // ── Sample data ───────────────────────────────────────────────────────────────
@@ -103,6 +192,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
       { id: uid(), situationId: sit2.id, startMonth: start, endMonth: end24 },
       { id: uid(), situationId: sit3.id, startMonth: start, endMonth: end24 },
     ],
+    effectEntries: [],
     savingsBalancePoints: [],
   };
 
@@ -120,6 +210,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
       { id: uid(), situationId: sit2.id, startMonth: start, endMonth: end24 },
       { id: uid(), situationId: sit3.id, startMonth: start, endMonth: end24 },
     ],
+    effectEntries: [],
     savingsBalancePoints: [],
   };
 
@@ -138,6 +229,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
       { id: uid(), situationId: sit6.id, startMonth: steuerMonth, endMonth: steuerMonth },
       { id: uid(), situationId: sit5.id, startMonth: autoMonth, endMonth: autoMonth },
     ],
+    effectEntries: [],
     savingsBalancePoints: [],
   };
 
@@ -157,6 +249,7 @@ interface AppState {
 
   // Situation actions
   addSituation: (s: Situation) => void;
+  duplicateSituation: (id: string) => void;
   updateSituation: (id: string, updates: Partial<Situation>) => void;
   deleteSituation: (id: string) => void;
   reorderSituations: (fromIndex: number, toIndex: number) => void;
@@ -167,8 +260,14 @@ interface AppState {
   deleteScenario: (id: string) => void;
   setActiveScenario: (id: string) => void;
 
-  // Entry painting (batch update of entries for a situation in active scenario)
+  // Entry painting
   paintEntries: (situationId: string, months: string[], mode: 'add' | 'remove') => void;
+  paintEffectEntries: (
+    situationId: string,
+    effectId: string,
+    months: string[],
+    mode: 'add' | 'remove',
+  ) => void;
 
   // Data import/export
   loadData: (data: { situations: Situation[]; scenarios: Scenario[] }) => void;
@@ -190,9 +289,25 @@ export const useStore = create<AppState>()(
       activeScenarioId: sample.scenarios[0].id,
       compareMode: false,
 
-      // ── Situations ──
       addSituation: (s) =>
         set((state) => ({ situations: [...state.situations, normalizeSituation(s)] })),
+      duplicateSituation: (id) =>
+        set((state) => {
+          const index = state.situations.findIndex((s) => s.id === id);
+          if (index < 0) return {};
+
+          const source = state.situations[index];
+          const duplicate: Situation = normalizeSituation({
+            ...source,
+            id: uid(),
+            name: `${source.name} (Kopie)`,
+            effects: source.effects.map((effect) => ({ ...effect, id: uid() })),
+          });
+
+          const situations = [...state.situations];
+          situations.splice(index + 1, 0, duplicate);
+          return { situations };
+        }),
       updateSituation: (id, updates) =>
         set((state) => ({
           situations: state.situations.map((s) =>
@@ -212,10 +327,10 @@ export const useStore = create<AppState>()(
           scenarios: state.scenarios.map((sc) => ({
             ...sc,
             entries: sc.entries.filter((e) => e.situationId !== id),
+            effectEntries: sc.effectEntries.filter((e) => e.situationId !== id),
           })),
         })),
 
-      // ── Scenarios ──
       addScenario: (s) =>
         set((state) => ({ scenarios: [...state.scenarios, normalizeScenario(s)], activeScenarioId: s.id })),
       updateScenario: (id, updates) =>
@@ -232,49 +347,115 @@ export const useStore = create<AppState>()(
         }),
       setActiveScenario: (id) => set({ activeScenarioId: id }),
 
-      // ── Timeline painting ──
       paintEntries: (situationId, paintedMonths, mode) =>
         set((state) => {
           const scenario = state.scenarios.find((s) => s.id === state.activeScenarioId);
           if (!scenario) return {};
 
-          // Collect currently active months for this situation
-          const activeSet = new Set<string>();
-          for (const entry of scenario.entries) {
-            if (entry.situationId !== situationId) continue;
-            for (const m of rangeToMonths(entry.startMonth, entry.endMonth)) {
-              activeSet.add(m);
+          const situationActive = activeMonthsFromEntries(
+            scenario.entries.filter((entry) => entry.situationId === situationId),
+          );
+
+          if (mode === 'add') {
+            for (const month of paintedMonths) situationActive.add(month);
+          } else {
+            for (const month of paintedMonths) situationActive.delete(month);
+          }
+
+          const scenarioEnd = addMonths(scenario.startMonth, scenario.durationMonths - 1);
+          for (const month of [...situationActive]) {
+            if (month < scenario.startMonth || month > scenarioEnd) {
+              situationActive.delete(month);
             }
           }
 
-          // Apply paint operation
-          if (mode === 'add') {
-            for (const m of paintedMonths) activeSet.add(m);
-          } else {
-            for (const m of paintedMonths) activeSet.delete(m);
+          const otherSituationEntries = scenario.entries.filter((entry) => entry.situationId !== situationId);
+          const newSituationEntries = toScenarioEntries(situationId, situationActive);
+
+          const effectEntriesForOtherSituations = scenario.effectEntries.filter(
+            (entry) => entry.situationId !== situationId,
+          );
+
+          const prunedEffectEntriesForSituation: ScenarioEffectEntry[] = [];
+          const effectGroups = new Map<string, ScenarioEffectEntry[]>();
+          for (const entry of scenario.effectEntries) {
+            if (entry.situationId !== situationId) continue;
+            const group = effectGroups.get(entry.effectId);
+            if (group) {
+              group.push(entry);
+            } else {
+              effectGroups.set(entry.effectId, [entry]);
+            }
           }
 
-          // Keep only months within the scenario's time range
-          const scenarioEnd = addMonths(scenario.startMonth, scenario.durationMonths - 1);
-          for (const m of [...activeSet]) {
-            if (m < scenario.startMonth || m > scenarioEnd) activeSet.delete(m);
+          for (const [effectId, entries] of effectGroups.entries()) {
+            const effectMonths = activeMonthsFromEntries(entries);
+            const kept = new Set<string>();
+            for (const month of effectMonths) {
+              if (situationActive.has(month)) kept.add(month);
+            }
+            prunedEffectEntriesForSituation.push(...toScenarioEffectEntries(situationId, effectId, kept));
           }
-
-          // Build new entries for this situation
-          const newRanges = monthsToRanges([...activeSet]);
-          const newEntries: ScenarioEntry[] = newRanges.map((r) => ({
-            id: uid(),
-            situationId,
-            startMonth: r.startMonth,
-            endMonth: r.endMonth,
-          }));
-
-          // Merge with entries from other situations
-          const otherEntries = scenario.entries.filter((e) => e.situationId !== situationId);
 
           return {
             scenarios: state.scenarios.map((s) =>
-              s.id === state.activeScenarioId ? { ...s, entries: [...otherEntries, ...newEntries] } : s,
+              s.id === state.activeScenarioId
+                ? {
+                    ...s,
+                    entries: [...otherSituationEntries, ...newSituationEntries],
+                    effectEntries: [...effectEntriesForOtherSituations, ...prunedEffectEntriesForSituation],
+                  }
+                : s,
+            ),
+          };
+        }),
+
+      paintEffectEntries: (situationId, effectId, paintedMonths, mode) =>
+        set((state) => {
+          const scenario = state.scenarios.find((s) => s.id === state.activeScenarioId);
+          if (!scenario) return {};
+
+          const scenarioEnd = addMonths(scenario.startMonth, scenario.durationMonths - 1);
+          const situationActive = activeMonthsFromEntries(
+            scenario.entries.filter((entry) => entry.situationId === situationId),
+          );
+          if (situationActive.size === 0) return {};
+
+          const currentDisabledEntries = scenario.effectEntries.filter(
+            (entry) => entry.situationId === situationId && entry.effectId === effectId,
+          );
+          const disabledMonths = activeMonthsFromEntries(currentDisabledEntries);
+
+          if (mode === 'add') {
+            for (const month of paintedMonths) {
+              disabledMonths.delete(month);
+            }
+          } else {
+            for (const month of paintedMonths) {
+              if (situationActive.has(month)) disabledMonths.add(month);
+            }
+          }
+
+          for (const month of [...disabledMonths]) {
+            const outsideScenario = month < scenario.startMonth || month > scenarioEnd;
+            if (outsideScenario || !situationActive.has(month)) {
+              disabledMonths.delete(month);
+            }
+          }
+
+          const otherEffectEntries = scenario.effectEntries.filter(
+            (entry) => !(entry.situationId === situationId && entry.effectId === effectId),
+          );
+          const nextEffectEntries = toScenarioEffectEntries(situationId, effectId, disabledMonths);
+
+          return {
+            scenarios: state.scenarios.map((s) =>
+              s.id === state.activeScenarioId
+                ? {
+                    ...s,
+                    effectEntries: [...otherEffectEntries, ...nextEffectEntries],
+                  }
+                : s,
             ),
           };
         }),
@@ -307,23 +488,21 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'finance-simulator-v1',
-      version: 3,
-      migrate: (persistedState) => {
+      version: 5,
+      migrate: (persistedState, fromVersion) => {
         const state = (persistedState ?? {}) as Partial<AppState>;
+        const situations = normalizeSituations((state.situations ?? sample.situations) as Situation[]);
+        const normalizedScenarios = normalizeScenarios((state.scenarios ?? sample.scenarios) as Scenario[]);
+        const scenarios = fromVersion < 5
+          ? convertLegacyEffectEntriesToDisabled(normalizedScenarios)
+          : normalizedScenarios;
+
         return {
           ...state,
-          situations: normalizeSituations((state.situations ?? sample.situations) as Situation[]),
-          scenarios: normalizeScenarios((state.scenarios ?? sample.scenarios) as Scenario[]),
+          situations,
+          scenarios,
         };
       },
     },
   ),
 );
-
-// ── Selectors ─────────────────────────────────────────────────────────────────
-
-export function getActiveScenario(state: AppState): Scenario | undefined {
-  return state.scenarios.find((s) => s.id === state.activeScenarioId);
-}
-
-export { sortMonths };

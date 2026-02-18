@@ -1,5 +1,5 @@
 import type { Scenario, Situation, MonthlyBalance } from './types';
-import { addMonths, monthsBetween } from './utils/months';
+import { addMonths, monthsBetween, rangeToMonths } from './utils/months';
 
 export function simulateScenario(
   scenario: Scenario,
@@ -7,9 +7,21 @@ export function simulateScenario(
 ): MonthlyBalance[] {
   const situationMap = new Map(situations.map((s) => [s.id, s]));
 
-  // Build the list of months to simulate
   const endMonth = addMonths(scenario.startMonth, scenario.durationMonths - 1);
   const months = monthsBetween(scenario.startMonth, endMonth);
+
+  const activeMonthsByEffect = new Map<string, Set<string>>();
+  for (const entry of scenario.effectEntries) {
+    const key = `${entry.situationId}::${entry.effectId}`;
+    let set = activeMonthsByEffect.get(key);
+    if (!set) {
+      set = new Set<string>();
+      activeMonthsByEffect.set(key, set);
+    }
+    for (const month of rangeToMonths(entry.startMonth, entry.endMonth)) {
+      if (month >= scenario.startMonth && month <= endMonth) set.add(month);
+    }
+  }
 
   let balance = scenario.initialBalance;
   const result: MonthlyBalance[] = [];
@@ -19,15 +31,18 @@ export function simulateScenario(
     let expenses = 0;
 
     for (const entry of scenario.entries) {
-      // Is this entry active this month?
       if (month < entry.startMonth || month > entry.endMonth) continue;
 
       const situation = situationMap.get(entry.situationId);
       if (!situation) continue;
 
       for (const effect of situation.effects) {
-        const isFirstMonth = month === entry.startMonth;
+        const effectKey = `${entry.situationId}::${effect.id}`;
+        const disabledMonths = activeMonthsByEffect.get(effectKey);
+        const effectIsActive = !disabledMonths || !disabledMonths.has(month);
+        if (!effectIsActive) continue;
 
+        const isFirstMonth = month === entry.startMonth;
         if (effect.type === 'one-time' && !isFirstMonth) continue;
 
         if (effect.category === 'income') {
@@ -47,7 +62,6 @@ export function simulateScenario(
   return result;
 }
 
-/** Simulate all scenarios and return a map of scenarioId → MonthlyBalance[] */
 export function simulateAll(
   scenarios: Scenario[],
   situations: Situation[],
