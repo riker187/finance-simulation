@@ -8,6 +8,7 @@ dist/
 .env
 .env.local
 .env.*.local
+.env.production
 
 # Editor / OS
 .DS_Store
@@ -17,7 +18,14 @@ dist/
 *.swo
 
 # Logs
+*.log
 npm-debug.log*
+
+# TypeScript incremental build
+*.tsbuildinfo
+
+# Test coverage
+coverage/
 
 # Claude Code internal
 .claude/

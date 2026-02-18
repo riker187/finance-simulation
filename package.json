@@ -1,6 +1,26 @@
 {
   "name": "finance-simulation",
   "version": "1.0.0",
+  "description": "Self-hosted financial planning tool — model income, expenses, and life scenarios on an interactive timeline with real-time multi-user sync.",
+  "author": "Jens Constroffer",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/riker187/finance-simulation.git"
+  },
+  "homepage": "https://github.com/riker187/finance-simulation#readme",
+  "bugs": {
+    "url": "https://github.com/riker187/finance-simulation/issues"
+  },
+  "keywords": [
+    "finance",
+    "simulation",
+    "planning",
+    "budgeting",
+    "react",
+    "typescript",
+    "self-hosted"
+  ],
   "private": true,
   "type": "module",
   "scripts": {
