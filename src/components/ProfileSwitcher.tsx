@@ -123,9 +123,9 @@ export function ProfileSwitcher() {
     }
   };
 
-  const handlePinUnlock = async () => {
+  const handlePinUnlock = () => {
     if (!pinUnlockId) return;
-    const ok = await verifyProfilePin(pinUnlockId, pinUnlockEntry);
+    const ok = verifyProfilePin(pinUnlockId, pinUnlockEntry);
     if (ok) {
       setActiveProfile(pinUnlockId);
     } else {
@@ -144,31 +144,31 @@ export function ProfileSwitcher() {
     setOpen(false);
   };
 
-  const handleSetPin = async () => {
+  const handleSetPin = () => {
     if (!pinManageId) return;
     if (pinNew.length !== 4) { setPinManageError('PIN muss genau 4 Ziffern haben'); return; }
     if (pinNew !== pinConfirm) { setPinManageError('PINs stimmen nicht überein'); return; }
-    await setProfilePin(pinManageId, pinNew);
+    setProfilePin(pinManageId, pinNew);
     refreshProfiles();
     setPinManageId(null);
   };
 
-  const handleRemovePin = async () => {
+  const handleRemovePin = () => {
     if (!pinManageId) return;
-    const ok = await verifyProfilePin(pinManageId, pinCurrent);
+    const ok = verifyProfilePin(pinManageId, pinCurrent);
     if (!ok) { setPinManageError('Falscher PIN'); setPinCurrent(''); return; }
     clearProfilePin(pinManageId);
     refreshProfiles();
     setPinManageId(null);
   };
 
-  const handleChangePin = async () => {
+  const handleChangePin = () => {
     if (!pinManageId) return;
-    const ok = await verifyProfilePin(pinManageId, pinCurrent);
+    const ok = verifyProfilePin(pinManageId, pinCurrent);
     if (!ok) { setPinManageError('Aktueller PIN falsch'); setPinCurrent(''); return; }
     if (pinNew.length !== 4) { setPinManageError('Neuer PIN muss 4 Ziffern haben'); return; }
     if (pinNew !== pinConfirm) { setPinManageError('Neue PINs stimmen nicht überein'); return; }
-    await setProfilePin(pinManageId, pinNew);
+    setProfilePin(pinManageId, pinNew);
     refreshProfiles();
     setPinManageId(null);
   };

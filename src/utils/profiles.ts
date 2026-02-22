@@ -85,20 +85,26 @@ export function updateProfile(id: string, patch: Partial<Pick<Profile, 'name' | 
 
 // ── PIN protection ────────────────────────────────────────────────────────────
 
-async function hashPin(pin: string): Promise<string> {
-  const data = new TextEncoder().encode('finance-sim-v1:' + pin);
-  const buffer = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+// FNV-1a 32-bit hash — synchronous, works in all browser contexts (no secure context required)
+function hashPin(pin: string): string {
+  const input = 'finance-sim-v1:' + pin;
+  let h1 = 0x811c9dc5;
+  let h2 = 0x9747b28c;
+  for (let i = 0; i < input.length; i++) {
+    h1 ^= input.charCodeAt(i);
+    h1 = Math.imul(h1, 0x01000193);
+    h2 ^= input.charCodeAt(input.length - 1 - i);
+    h2 = Math.imul(h2, 0x5bd1e995);
+  }
+  return ((h1 >>> 0).toString(16).padStart(8, '0')) + ((h2 >>> 0).toString(16).padStart(8, '0'));
 }
 
 export function profileHasPin(id: string): boolean {
   return Boolean(getProfiles().find((p) => p.id === id)?.pinHash);
 }
 
-export async function setProfilePin(id: string, pin: string): Promise<void> {
-  const hash = await hashPin(pin);
+export function setProfilePin(id: string, pin: string): void {
+  const hash = hashPin(pin);
   const profiles = getProfiles();
   const idx = profiles.findIndex((p) => p.id === id);
   if (idx === -1) return;
@@ -106,11 +112,10 @@ export async function setProfilePin(id: string, pin: string): Promise<void> {
   saveProfiles(profiles);
 }
 
-export async function verifyProfilePin(id: string, pin: string): Promise<boolean> {
+export function verifyProfilePin(id: string, pin: string): boolean {
   const profile = getProfiles().find((p) => p.id === id);
   if (!profile?.pinHash) return true;
-  const hash = await hashPin(pin);
-  return hash === profile.pinHash;
+  return hashPin(pin) === profile.pinHash;
 }
 
 export function clearProfilePin(id: string): void {
