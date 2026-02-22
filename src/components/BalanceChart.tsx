@@ -36,7 +36,7 @@ function buildChartData(
 
   type SimEntry = {
     scenario: Scenario;
-    dataMap: Map<string, { balance: number; income: number; expenses: number; net: number }>;
+    dataMap: Map<string, { balance: number; income: number; expenses: number; net: number; recurringNet: number; balanceMin: number; balanceMax: number }>;
   };
 
   const sims: SimEntry[] = visibleScenarios.map((sc) => {
@@ -57,6 +57,9 @@ function buildChartData(
         row[`${scenario.id}__income`] = point.income;
         row[`${scenario.id}__expenses`] = point.expenses;
         row[`${scenario.id}__net`] = point.net;
+        row[`${scenario.id}__recurringNet`] = point.recurringNet;
+        row[`${scenario.id}__balanceMin`] = point.balanceMin;
+        row[`${scenario.id}__balanceMax`] = point.balanceMax;
       }
     }
     const actual = actualMap.get(month);
@@ -103,6 +106,32 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
   );
 
   const negativeFloor = Math.min(0, minBalance - padding);
+
+  // Zusammenhängende Phasen mit recurringNet >= 0 (nachhaltig)
+  const sustainableRanges: { x1: string; x2: string }[] = [];
+  {
+    const key = `${activeScenarioId}__recurringNet`;
+    let rangeStart: string | null = null;
+    for (let i = 0; i < chartData.length; i++) {
+      const val = chartData[i][key];
+      const sustainable = typeof val === 'number' && val >= 0;
+      if (sustainable && rangeStart === null) rangeStart = chartData[i].month as string;
+      if (!sustainable && rangeStart !== null) {
+        sustainableRanges.push({ x1: rangeStart, x2: chartData[i - 1].month as string });
+        rangeStart = null;
+      }
+    }
+    if (rangeStart !== null) {
+      sustainableRanges.push({ x1: rangeStart, x2: chartData[chartData.length - 1].month as string });
+    }
+  }
+
+  // Sensitivitätsband: sichtbar wenn balanceMin !== balanceMax irgendwo
+  const hasVariance = chartData.some((row) => {
+    const lo = row[`${activeScenarioId}__balanceMin`];
+    const hi = row[`${activeScenarioId}__balanceMax`];
+    return typeof lo === 'number' && typeof hi === 'number' && lo !== hi;
+  });
 
   if (chartData.length === 0) {
     return (
@@ -181,6 +210,18 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
                         );
                       })()}
                     </div>
+                    {(() => {
+                      const rn = row[`${sc.id}__recurringNet`] as number;
+                      const ok = rn >= 0;
+                      return (
+                        <div className="flex justify-between gap-4">
+                          <span className="text-slate-400">Nachhaltig</span>
+                          <span className={ok ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>
+                            {ok ? 'Ja' : 'Nein'} ({ok ? '+' : ''}{formatEur(rn)})
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
               </div>
@@ -200,6 +241,19 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
         <span className="text-[11px] px-2 py-1 rounded-md bg-red-950/80 border border-red-500/60 text-red-200">
           Kritischer Bereich: Kontostand unter 0 EUR
         </span>
+        <span className="text-[11px] px-2 py-1 rounded-md bg-green-950/80 border border-green-500/60 text-green-200">
+          Grün = nachhaltig (ohne Einmal-Ereignisse)
+        </span>
+        {typeof activeScenario.goalBalance === 'number' && (
+          <span className="text-[11px] px-2 py-1 rounded-md bg-amber-950/80 border border-amber-500/60 text-amber-200">
+            Amber = Zielkontostand
+          </span>
+        )}
+        {hasVariance && (
+          <span className="text-[11px] px-2 py-1 rounded-md bg-slate-900/90 border border-slate-600 text-slate-400">
+            Gestrichelt = Sensitivitätsband
+          </span>
+        )}
         <span className="text-[11px] px-2 py-1 rounded-md bg-slate-900/90 border border-slate-700 text-slate-300">
           Balken = Monats-Transfer Tagesgeld
         </span>
@@ -234,6 +288,17 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
             width={42}
             domain={[-maxAbsTransfer, maxAbsTransfer]}
           />
+          {sustainableRanges.map((r, i) => (
+            <ReferenceArea
+              key={`sustainable-${i}`}
+              yAxisId="balance"
+              x1={r.x1}
+              x2={r.x2}
+              fill="#22c55e"
+              fillOpacity={0.07}
+              ifOverflow="hidden"
+            />
+          ))}
           <ReferenceArea
             yAxisId="balance"
             y1={negativeFloor}
@@ -244,6 +309,35 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
           />
           <Tooltip content={<CustomTooltip />} />
           <ReferenceLine yAxisId="balance" y={0} stroke="#ef4444" strokeDasharray="6 4" strokeWidth={2} />
+          {typeof activeScenario.goalBalance === 'number' && (
+            <ReferenceLine
+              yAxisId="balance"
+              y={activeScenario.goalBalance}
+              stroke="#f59e0b"
+              strokeDasharray="6 4"
+              strokeWidth={1.5}
+              label={{ value: `Ziel: ${formatEur(activeScenario.goalBalance)}`, position: 'insideTopRight', fontSize: 10, fill: '#f59e0b' }}
+            />
+          )}
+          {(activeScenario.annotations ?? []).map((ann) => (
+            <ReferenceLine
+              key={ann.id}
+              yAxisId="balance"
+              x={ann.month}
+              stroke="#94a3b8"
+              strokeDasharray="3 3"
+              strokeWidth={1}
+              label={(props: { viewBox?: { x?: number; y?: number } }) => {
+                const x = (props.viewBox?.x ?? 0) + 4;
+                const y = (props.viewBox?.y ?? 0) + 14;
+                return (
+                  <text x={x} y={y} fill="#94a3b8" fontSize={10} textAnchor="start">
+                    {ann.text}
+                  </text>
+                );
+              }}
+            />
+          ))}
 
           <Bar yAxisId="transfer" dataKey={transferKey} barSize={10} maxBarSize={12} radius={[2, 2, 2, 2]}>
             {chartData.map((entry, index) => {
@@ -279,6 +373,32 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
             activeDot={{ r: 5, fill: activeScenario.color, strokeWidth: 0 }}
             connectNulls={false}
           />
+          {hasVariance && (
+            <>
+              <Line
+                yAxisId="balance"
+                type="monotone"
+                dataKey={`${activeScenarioId}__balanceMin`}
+                stroke={activeScenario.color}
+                strokeWidth={1}
+                strokeDasharray="3 3"
+                strokeOpacity={0.4}
+                dot={false}
+                connectNulls={false}
+              />
+              <Line
+                yAxisId="balance"
+                type="monotone"
+                dataKey={`${activeScenarioId}__balanceMax`}
+                stroke={activeScenario.color}
+                strokeWidth={1}
+                strokeDasharray="3 3"
+                strokeOpacity={0.4}
+                dot={false}
+                connectNulls={false}
+              />
+            </>
+          )}
 
           <Line
             yAxisId="balance"

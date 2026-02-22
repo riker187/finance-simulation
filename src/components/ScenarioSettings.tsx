@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import { formatMonthLong, formatMonthShort, addMonths } from '../utils/months';
 import { simulateScenario } from '../simulation';
 import { uid } from '../utils/uid';
+import type { Annotation } from '../types';
 
 function formatEur(n: number): string {
   return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
@@ -27,11 +28,23 @@ export function ScenarioSettings() {
   const [newPointMonth, setNewPointMonth] = useState(scenario.startMonth);
   const [newPointBalance, setNewPointBalance] = useState<number>(0);
 
+  const [showAnnotationsManager, setShowAnnotationsManager] = useState(false);
+  const [newAnnotationMonth, setNewAnnotationMonth] = useState(scenario.startMonth);
+  const [newAnnotationText, setNewAnnotationText] = useState('');
+
+  const [goalBalanceInput, setGoalBalanceInput] = useState<string>(
+    scenario.goalBalance != null ? String(scenario.goalBalance) : '',
+  );
+
   useEffect(() => {
     setNewPointMonth(scenario.startMonth);
     setNewPointBalance(0);
     setShowSavingsManager(false);
-  }, [scenario.id, scenario.startMonth]);
+    setNewAnnotationMonth(scenario.startMonth);
+    setNewAnnotationText('');
+    setShowAnnotationsManager(false);
+    setGoalBalanceInput(scenario.goalBalance != null ? String(scenario.goalBalance) : '');
+  }, [scenario.id, scenario.startMonth, scenario.goalBalance]);
 
   const points = useMemo(
     () => [...scenario.savingsBalancePoints].sort((a, b) => a.month.localeCompare(b.month)),
@@ -58,6 +71,32 @@ export function ScenarioSettings() {
   const addPoint = () => {
     if (!newPointMonth) return;
     upsertPoint(newPointMonth, newPointBalance || 0);
+  };
+
+  const annotations = useMemo(
+    () => [...(scenario.annotations ?? [])].sort((a, b) => a.month.localeCompare(b.month)),
+    [scenario.annotations],
+  );
+
+  const addAnnotation = () => {
+    if (!newAnnotationMonth || !newAnnotationText.trim()) return;
+    const next: Annotation[] = [
+      ...(scenario.annotations ?? []).filter((a) => a.month !== newAnnotationMonth),
+      { id: uid(), month: newAnnotationMonth, text: newAnnotationText.trim() },
+    ].sort((a, b) => a.month.localeCompare(b.month));
+    updateScenario(scenario.id, { annotations: next });
+    setNewAnnotationText('');
+  };
+
+  const removeAnnotation = (id: string) => {
+    updateScenario(scenario.id, {
+      annotations: (scenario.annotations ?? []).filter((a) => a.id !== id),
+    });
+  };
+
+  const commitGoal = () => {
+    const v = parseFloat(goalBalanceInput);
+    updateScenario(scenario.id, { goalBalance: isNaN(v) ? undefined : v });
   };
 
   return (
@@ -103,15 +142,114 @@ export function ScenarioSettings() {
           </>
         )}
 
-        <div className="ml-auto">
+        <div className="flex items-center gap-1.5 text-slate-500">
+          <span>Ziel:</span>
+          <input
+            type="number"
+            className="w-28 rounded bg-slate-900 border border-slate-700 px-2 py-0.5 text-amber-300 text-xs focus:outline-none focus:border-amber-500"
+            value={goalBalanceInput}
+            onChange={(e) => setGoalBalanceInput(e.target.value)}
+            onBlur={commitGoal}
+            onKeyDown={(e) => e.key === 'Enter' && commitGoal()}
+            placeholder="EUR (optional)"
+          />
+          {scenario.goalBalance != null && (
+            <button
+              className="text-slate-600 hover:text-red-400 text-xs transition-colors"
+              title="Ziel entfernen"
+              onClick={() => { setGoalBalanceInput(''); updateScenario(scenario.id, { goalBalance: undefined }); }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
+            onClick={() => setShowAnnotationsManager(true)}
+          >
+            Annotationen ({annotations.length})
+          </button>
           <button
             className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
             onClick={() => setShowSavingsManager(true)}
           >
-            IST Tagesgeld verwalten ({points.length})
+            IST Tagesgeld ({points.length})
           </button>
         </div>
       </div>
+
+      {showAnnotationsManager && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl bg-slate-800 border border-slate-700 shadow-2xl p-6 space-y-4 max-h-[85vh] overflow-auto">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Monat-Annotationen</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Szenario: {scenario.name}</p>
+              </div>
+              <button
+                className="px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+                onClick={() => setShowAnnotationsManager(false)}
+              >
+                Schließen
+              </button>
+            </div>
+
+            <div className="rounded-xl bg-slate-900 border border-slate-700 p-4 space-y-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-slate-300 text-sm font-medium">Neue Annotation</span>
+                <input
+                  type="month"
+                  className="rounded-md bg-slate-950 border border-slate-700 px-2 py-1 text-slate-200"
+                  value={newAnnotationMonth}
+                  min={scenario.startMonth}
+                  max={endMonth}
+                  onChange={(e) => setNewAnnotationMonth(e.target.value)}
+                />
+                <input
+                  type="text"
+                  className="flex-1 min-w-40 rounded-md bg-slate-950 border border-slate-700 px-2 py-1 text-slate-200"
+                  value={newAnnotationText}
+                  onChange={(e) => setNewAnnotationText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addAnnotation()}
+                  placeholder="Kurztext (z.B. Kündigung)"
+                />
+                <button
+                  className="px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40"
+                  onClick={addAnnotation}
+                  disabled={!newAnnotationText.trim()}
+                >
+                  Speichern
+                </button>
+              </div>
+
+              {annotations.length === 0 ? (
+                <p className="text-slate-500 text-sm">Noch keine Annotationen vorhanden.</p>
+              ) : (
+                <div className="space-y-2">
+                  {annotations.map((a) => (
+                    <div
+                      key={a.id}
+                      className="flex items-center gap-3 rounded-md bg-slate-950 border border-slate-700 px-3 py-2"
+                    >
+                      <span className="text-slate-300 min-w-20">{formatMonthShort(a.month)}</span>
+                      <span className="text-slate-200 flex-1">{a.text}</span>
+                      <button
+                        className="ml-auto text-red-400 hover:text-red-300"
+                        title="Annotation entfernen"
+                        onClick={() => removeAnnotation(a.id)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSavingsManager && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">

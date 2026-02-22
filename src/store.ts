@@ -27,6 +27,7 @@ function normalizeScenario(sc: Scenario): Scenario {
     ...sc,
     effectEntries: Array.isArray(sc.effectEntries) ? sc.effectEntries : [],
     savingsBalancePoints: Array.isArray(sc.savingsBalancePoints) ? sc.savingsBalancePoints : [],
+    annotations: Array.isArray(sc.annotations) ? sc.annotations : [],
   };
 }
 
@@ -216,6 +217,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
     ],
     effectEntries: [],
     savingsBalancePoints: [],
+    annotations: [],
   };
 
   const switchMonth = addMonths(start, 6);
@@ -234,6 +236,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
     ],
     effectEntries: [],
     savingsBalancePoints: [],
+    annotations: [],
   };
 
   const steuerMonth = addMonths(start, 2);
@@ -253,6 +256,7 @@ function buildSampleData(): { situations: Situation[]; scenarios: Scenario[] } {
     ],
     effectEntries: [],
     savingsBalancePoints: [],
+    annotations: [],
   };
 
   return {

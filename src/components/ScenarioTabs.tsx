@@ -31,6 +31,7 @@ function ScenarioFormModal({
       entries: initial?.entries ?? [],
       effectEntries: initial?.effectEntries ?? [],
       savingsBalancePoints: initial?.savingsBalancePoints ?? [],
+      annotations: initial?.annotations ?? [],
     });
   };
 
