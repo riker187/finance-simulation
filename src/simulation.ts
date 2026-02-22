@@ -24,11 +24,17 @@ export function simulateScenario(
   }
 
   let balance = scenario.initialBalance;
+  let balanceMin = scenario.initialBalance;
+  let balanceMax = scenario.initialBalance;
   const result: MonthlyBalance[] = [];
 
   for (const month of months) {
     let income = 0;
     let expenses = 0;
+    let recurringIncome = 0;
+    let recurringExpenses = 0;
+    let incomeMin = 0, expMin = 0;
+    let incomeMax = 0, expMax = 0;
 
     for (const entry of scenario.entries) {
       if (month < entry.startMonth || month > entry.endMonth) continue;
@@ -45,18 +51,32 @@ export function simulateScenario(
         const isFirstMonth = month === entry.startMonth;
         if (effect.type === 'one-time' && !isFirstMonth) continue;
 
+        const v = (effect.variancePercent ?? 0) / 100;
+        const dir = effect.varianceDirection ?? '±';
+        const hasUp = dir === '+' || dir === '±';
+        const hasDown = dir === '-' || dir === '±';
+
         if (effect.category === 'income') {
           income += effect.amount;
+          if (effect.type === 'recurring') recurringIncome += effect.amount;
+          incomeMin += effect.amount * (hasDown ? (1 - v) : 1);
+          incomeMax += effect.amount * (hasUp ? (1 + v) : 1);
         } else {
           expenses += effect.amount;
+          if (effect.type === 'recurring') recurringExpenses += effect.amount;
+          expMin += effect.amount * (hasUp ? (1 + v) : 1);
+          expMax += effect.amount * (hasDown ? (1 - v) : 1);
         }
       }
     }
 
     const net = income - expenses;
+    const recurringNet = recurringIncome - recurringExpenses;
     balance += net;
+    balanceMin += incomeMin - expMin;
+    balanceMax += incomeMax - expMax;
 
-    result.push({ month, balance, income, expenses, net });
+    result.push({ month, balance, income, expenses, net, recurringNet, balanceMin, balanceMax });
   }
 
   return result;

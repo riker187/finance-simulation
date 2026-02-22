@@ -136,6 +136,10 @@ export function TimelineEditor() {
   const endMonth = addMonths(scenario.startMonth, scenario.durationMonths - 1);
   const months = monthsBetween(scenario.startMonth, endMonth);
 
+  const annotationsByMonth = new Map<string, string>(
+    (scenario.annotations ?? []).map((a) => [a.month, a.text]),
+  );
+
   const groupedSituations = useMemo(() => {
     const map = new Map<
       string,
@@ -251,15 +255,24 @@ export function TimelineEditor() {
             >
               Situation
             </div>
-            {months.map((month) => (
-              <div
-                key={month}
-                className="shrink-0 flex items-center justify-center text-xs text-slate-500 border-l border-slate-800"
-                style={{ width: CELL_W }}
-              >
-                {formatMonthShort(month)}
-              </div>
-            ))}
+            {months.map((month) => {
+              const annText = annotationsByMonth.get(month);
+              return (
+                <div
+                  key={month}
+                  className="shrink-0 relative flex items-center justify-center text-xs text-slate-500 border-l border-slate-800"
+                  style={{ width: CELL_W }}
+                >
+                  {formatMonthShort(month)}
+                  {annText && (
+                    <span
+                      className="absolute top-0.5 right-1 w-1.5 h-1.5 rounded-full bg-slate-400"
+                      title={annText}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 

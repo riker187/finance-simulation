@@ -7,6 +7,14 @@ export interface FinancialEffect {
   type: EffectType;
   category: EffectCategory;
   amount: number; // always positive; category determines sign
+  variancePercent?: number; // 0–100, optionale Streuung für Sensitivitätsanalyse
+  varianceDirection?: '+' | '-' | '±'; // Richtung der Streuung, default '±'
+}
+
+export interface Annotation {
+  id: string;
+  month: string; // 'YYYY-MM'
+  text: string;
 }
 
 export const DEFAULT_SITUATION_CATEGORY = 'Ohne Kategorie';
@@ -59,6 +67,8 @@ export interface Scenario {
   entries: ScenarioEntry[];
   effectEntries: ScenarioEffectEntry[];
   savingsBalancePoints: SavingsBalancePoint[];
+  goalBalance?: number; // optionaler Ziel-Kontostand
+  annotations: Annotation[]; // Monat-Notizen
 }
 
 export interface MonthlyBalance {
@@ -67,6 +77,9 @@ export interface MonthlyBalance {
   income: number;
   expenses: number;
   net: number;
+  recurringNet: number; // net ohne Einmal-Ereignisse
+  balanceMin: number; // pessimistischer Kontostand (Sensitivität)
+  balanceMax: number; // optimistischer Kontostand (Sensitivität)
 }
 
 export const SITUATION_COLORS = [
