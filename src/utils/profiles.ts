@@ -5,6 +5,7 @@ export interface Profile {
   name: string;
   color: string;
   createdAt: string;
+  pinHash?: string;
 }
 
 const PROFILES_KEY = 'finance-simulator-profiles';
@@ -79,6 +80,46 @@ export function updateProfile(id: string, patch: Partial<Pick<Profile, 'name' | 
   const idx = profiles.findIndex((p) => p.id === id);
   if (idx === -1) return;
   profiles[idx] = { ...profiles[idx], ...patch };
+  saveProfiles(profiles);
+}
+
+// ── PIN protection ────────────────────────────────────────────────────────────
+
+async function hashPin(pin: string): Promise<string> {
+  const data = new TextEncoder().encode('finance-sim-v1:' + pin);
+  const buffer = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+export function profileHasPin(id: string): boolean {
+  return Boolean(getProfiles().find((p) => p.id === id)?.pinHash);
+}
+
+export async function setProfilePin(id: string, pin: string): Promise<void> {
+  const hash = await hashPin(pin);
+  const profiles = getProfiles();
+  const idx = profiles.findIndex((p) => p.id === id);
+  if (idx === -1) return;
+  profiles[idx] = { ...profiles[idx], pinHash: hash };
+  saveProfiles(profiles);
+}
+
+export async function verifyProfilePin(id: string, pin: string): Promise<boolean> {
+  const profile = getProfiles().find((p) => p.id === id);
+  if (!profile?.pinHash) return true;
+  const hash = await hashPin(pin);
+  return hash === profile.pinHash;
+}
+
+export function clearProfilePin(id: string): void {
+  const profiles = getProfiles();
+  const idx = profiles.findIndex((p) => p.id === id);
+  if (idx === -1) return;
+  const updated = { ...profiles[idx] };
+  delete updated.pinHash;
+  profiles[idx] = updated;
   saveProfiles(profiles);
 }
 

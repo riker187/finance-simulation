@@ -237,7 +237,7 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
 
   return (
     <div className="w-full h-full relative">
-      <div className="absolute right-2 top-0 z-10 pointer-events-none flex items-center gap-2">
+      <div className="absolute right-2 top-1 z-10 pointer-events-none flex flex-col items-end gap-1">
         <span className="text-[11px] px-2 py-1 rounded-md bg-red-950/80 border border-red-500/60 text-red-200">
           Kritischer Bereich: Kontostand unter 0 EUR
         </span>
