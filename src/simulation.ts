@@ -1,4 +1,4 @@
-import type { Scenario, Situation, MonthlyBalance } from './types';
+import type { Scenario, Situation, MonthlyBalance, MonthBreakdown, SituationLine, EffectLine } from './types';
 import { addMonths, monthsBetween, rangeToMonths } from './utils/months';
 
 export function simulateScenario(
@@ -80,6 +80,69 @@ export function simulateScenario(
   }
 
   return result;
+}
+
+export function getMonthBreakdown(
+  scenario: Scenario,
+  situations: Situation[],
+  month: string,
+): MonthBreakdown {
+  const sitMap = new Map(situations.map((s) => [s.id, s]));
+
+  // Build disabledMonths map — same logic as simulateScenario
+  const disabledByEffect = new Map<string, Set<string>>();
+  for (const entry of scenario.effectEntries) {
+    const key = `${entry.situationId}::${entry.effectId}`;
+    let set = disabledByEffect.get(key);
+    if (!set) { set = new Set(); disabledByEffect.set(key, set); }
+    for (const m of rangeToMonths(entry.startMonth, entry.endMonth)) set.add(m);
+  }
+
+  const situationLines: SituationLine[] = [];
+  let totalIncome = 0;
+  let totalExpense = 0;
+
+  for (const entry of scenario.entries) {
+    if (month < entry.startMonth || month > entry.endMonth) continue;
+    const sit = sitMap.get(entry.situationId);
+    if (!sit) continue;
+
+    const effects: EffectLine[] = [];
+    let sitIncome = 0;
+    let sitExpense = 0;
+
+    for (const effect of sit.effects) {
+      const key = `${entry.situationId}::${effect.id}`;
+      if (disabledByEffect.get(key)?.has(month)) continue;
+      if (effect.type === 'one-time' && month !== entry.startMonth) continue;
+
+      const line: EffectLine = {
+        effectId: effect.id,
+        label: effect.label || (effect.category === 'income' ? 'Einnahme' : 'Ausgabe'),
+        amount: effect.amount,
+        category: effect.category,
+        isOneTime: effect.type === 'one-time',
+      };
+      effects.push(line);
+      if (effect.category === 'income') sitIncome += effect.amount;
+      else sitExpense += effect.amount;
+    }
+
+    if (effects.length === 0) continue;
+
+    situationLines.push({
+      situationId: sit.id,
+      name: sit.name,
+      color: sit.color,
+      effects,
+      totalIncome: sitIncome,
+      totalExpense: sitExpense,
+    });
+    totalIncome += sitIncome;
+    totalExpense += sitExpense;
+  }
+
+  return { month, situations: situationLines, totalIncome, totalExpense, net: totalIncome - totalExpense };
 }
 
 export function simulateAll(
