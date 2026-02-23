@@ -4,20 +4,19 @@ import { formatMonthLong, formatMonthShort, addMonths } from '../utils/months';
 import { simulateScenario } from '../simulation';
 import { uid } from '../utils/uid';
 import type { Annotation } from '../types';
-
-function formatEur(n: number): string {
-  return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
-}
+import { useT, formatEurLocalized, getLang } from '../utils/i18n';
 
 export function ScenarioSettings() {
   const situations = useStore((s) => s.situations);
   const scenarios = useStore((s) => s.scenarios);
   const activeScenarioId = useStore((s) => s.activeScenarioId);
   const updateScenario = useStore((s) => s.updateScenario);
+  const t = useT();
 
   const scenario = scenarios.find((s) => s.id === activeScenarioId);
   if (!scenario) return null;
 
+  const lang = getLang();
   const data = simulateScenario(scenario, situations);
   const lastPoint = data.at(-1);
   const endMonth = addMonths(scenario.startMonth, scenario.durationMonths - 1);
@@ -108,42 +107,42 @@ export function ScenarioSettings() {
         </div>
 
         <div className="flex items-center gap-1.5 text-slate-500">
-          <span>Start:</span>
-          <span className="text-slate-300">{formatMonthLong(scenario.startMonth)}</span>
+          <span>{t('Start:')}</span>
+          <span className="text-slate-300">{formatMonthLong(scenario.startMonth, lang)}</span>
         </div>
         <div className="flex items-center gap-1.5 text-slate-500">
-          <span>Ende:</span>
-          <span className="text-slate-300">{formatMonthLong(endMonth)}</span>
+          <span>{t('Ende:')}</span>
+          <span className="text-slate-300">{formatMonthLong(endMonth, lang)}</span>
         </div>
         <div className="flex items-center gap-1.5 text-slate-500">
-          <span>{scenario.durationMonths} Monate</span>
+          <span>{scenario.durationMonths} {t('Monate')}</span>
         </div>
 
         <div className="flex items-center gap-1.5 text-slate-500">
-          <span>Startkapital:</span>
-          <span className="text-slate-300">{formatEur(scenario.initialBalance)}</span>
+          <span>{t('Startkapital')}:</span>
+          <span className="text-slate-300">{formatEurLocalized(scenario.initialBalance)}</span>
         </div>
 
         {lastPoint && (
           <>
             <div className="flex items-center gap-1.5 text-slate-500">
-              <span>Endstand:</span>
+              <span>{t('Endstand:')}</span>
               <span className="font-semibold" style={{ color: lastPoint.balance >= 0 ? '#22c55e' : '#fb7185' }}>
-                {formatEur(lastPoint.balance)}
+                {formatEurLocalized(lastPoint.balance)}
               </span>
             </div>
             <div className="flex items-center gap-1.5 text-slate-500">
-              <span>Veränderung:</span>
+              <span>{t('Veränderung:')}</span>
               <span className="font-semibold" style={{ color: delta >= 0 ? '#22c55e' : '#fb7185' }}>
                 {delta >= 0 ? '+' : ''}
-                {formatEur(delta)}
+                {formatEurLocalized(delta)}
               </span>
             </div>
           </>
         )}
 
         <div className="flex items-center gap-1.5 text-slate-500">
-          <span>Ziel:</span>
+          <span>{t('Ziel:')}</span>
           <input
             type="number"
             className="w-28 rounded bg-slate-900 border border-slate-700 px-2 py-0.5 text-amber-300 text-xs focus:outline-none focus:border-amber-500"
@@ -151,12 +150,12 @@ export function ScenarioSettings() {
             onChange={(e) => setGoalBalanceInput(e.target.value)}
             onBlur={commitGoal}
             onKeyDown={(e) => e.key === 'Enter' && commitGoal()}
-            placeholder="EUR (optional)"
+            placeholder={t('EUR (optional)')}
           />
           {scenario.goalBalance != null && (
             <button
               className="text-slate-600 hover:text-red-400 text-xs transition-colors"
-              title="Ziel entfernen"
+              title={t('Ziel entfernen')}
               onClick={() => { setGoalBalanceInput(''); updateScenario(scenario.id, { goalBalance: undefined }); }}
             >
               ✕
@@ -169,13 +168,13 @@ export function ScenarioSettings() {
             className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
             onClick={() => setShowAnnotationsManager(true)}
           >
-            Annotationen ({annotations.length})
+            {t('Annotationen ({count})', { count: annotations.length })}
           </button>
           <button
             className="px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 transition-colors"
             onClick={() => setShowSavingsManager(true)}
           >
-            IST Tagesgeld ({points.length})
+            {t('IST Tagesgeld ({count})', { count: points.length })}
           </button>
         </div>
       </div>
@@ -185,20 +184,20 @@ export function ScenarioSettings() {
           <div className="w-full max-w-2xl rounded-2xl bg-slate-800 border border-slate-700 shadow-2xl p-6 space-y-4 max-h-[85vh] overflow-auto">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white">Monat-Annotationen</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Szenario: {scenario.name}</p>
+                <h2 className="text-lg font-semibold text-white">{t('Monat-Annotationen')}</h2>
+                <p className="text-xs text-slate-400 mt-0.5">{t('Szenario: {name}', { name: scenario.name })}</p>
               </div>
               <button
                 className="px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
                 onClick={() => setShowAnnotationsManager(false)}
               >
-                Schließen
+                {t('Schließen')}
               </button>
             </div>
 
             <div className="rounded-xl bg-slate-900 border border-slate-700 p-4 space-y-3">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-slate-300 text-sm font-medium">Neue Annotation</span>
+                <span className="text-slate-300 text-sm font-medium">{t('Neue Annotation')}</span>
                 <input
                   type="month"
                   className="rounded-md bg-slate-950 border border-slate-700 px-2 py-1 text-slate-200"
@@ -213,19 +212,19 @@ export function ScenarioSettings() {
                   value={newAnnotationText}
                   onChange={(e) => setNewAnnotationText(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addAnnotation()}
-                  placeholder="Kurztext (z.B. Kündigung)"
+                  placeholder={t('Kurztext (z.B. Kündigung)')}
                 />
                 <button
                   className="px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40"
                   onClick={addAnnotation}
                   disabled={!newAnnotationText.trim()}
                 >
-                  Speichern
+                  {t('Speichern')}
                 </button>
               </div>
 
               {annotations.length === 0 ? (
-                <p className="text-slate-500 text-sm">Noch keine Annotationen vorhanden.</p>
+                <p className="text-slate-500 text-sm">{t('Noch keine Annotationen vorhanden.')}</p>
               ) : (
                 <div className="space-y-2">
                   {annotations.map((a) => (
@@ -233,11 +232,11 @@ export function ScenarioSettings() {
                       key={a.id}
                       className="flex items-center gap-3 rounded-md bg-slate-950 border border-slate-700 px-3 py-2"
                     >
-                      <span className="text-slate-300 min-w-20">{formatMonthShort(a.month)}</span>
+                      <span className="text-slate-300 min-w-20">{formatMonthShort(a.month, lang)}</span>
                       <span className="text-slate-200 flex-1">{a.text}</span>
                       <button
                         className="ml-auto text-red-400 hover:text-red-300"
-                        title="Annotation entfernen"
+                        title={t('Annotation entfernen')}
                         onClick={() => removeAnnotation(a.id)}
                       >
                         ✕
@@ -256,20 +255,20 @@ export function ScenarioSettings() {
           <div className="w-full max-w-2xl rounded-2xl bg-slate-800 border border-slate-700 shadow-2xl p-6 space-y-4 max-h-[85vh] overflow-auto">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white">IST Tagesgeld-Stand</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Szenario: {scenario.name}</p>
+                <h2 className="text-lg font-semibold text-white">{t('IST Tagesgeld-Stand')}</h2>
+                <p className="text-xs text-slate-400 mt-0.5">{t('Szenario: {name}', { name: scenario.name })}</p>
               </div>
               <button
                 className="px-3 py-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
                 onClick={() => setShowSavingsManager(false)}
               >
-                Schließen
+                {t('Schließen')}
               </button>
             </div>
 
             <div className="rounded-xl bg-slate-900 border border-slate-700 p-4 space-y-3">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-slate-300 text-sm font-medium">Neuen IST-Punkt erfassen</span>
+                <span className="text-slate-300 text-sm font-medium">{t('Neuen IST-Punkt erfassen')}</span>
                 <input
                   type="month"
                   className="rounded-md bg-slate-950 border border-slate-700 px-2 py-1 text-slate-200"
@@ -283,18 +282,18 @@ export function ScenarioSettings() {
                   className="w-40 rounded-md bg-slate-950 border border-slate-700 px-2 py-1 text-slate-200"
                   value={newPointBalance}
                   onChange={(e) => setNewPointBalance(parseFloat(e.target.value) || 0)}
-                  placeholder="Betrag in EUR"
+                  placeholder={t('Betrag in EUR')}
                 />
                 <button
                   className="px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 text-white transition-colors"
                   onClick={addPoint}
                 >
-                  Speichern
+                  {t('Speichern')}
                 </button>
               </div>
 
               {points.length === 0 ? (
-                <p className="text-slate-500 text-sm">Noch keine IST-Punkte vorhanden.</p>
+                <p className="text-slate-500 text-sm">{t('Noch keine IST-Punkte vorhanden.')}</p>
               ) : (
                 <div className="space-y-2">
                   {points.map((p) => (
@@ -302,7 +301,7 @@ export function ScenarioSettings() {
                       key={p.id}
                       className="flex items-center gap-3 rounded-md bg-slate-950 border border-slate-700 px-3 py-2"
                     >
-                      <span className="text-slate-300 min-w-20">{formatMonthShort(p.month)}</span>
+                      <span className="text-slate-300 min-w-20">{formatMonthShort(p.month, lang)}</span>
                       <input
                         type="number"
                         className="w-44 rounded bg-slate-900 border border-slate-700 px-2 py-1 text-slate-200"
@@ -315,10 +314,10 @@ export function ScenarioSettings() {
                           })
                         }
                       />
-                      <span className="text-slate-500 text-xs">EUR</span>
+                      <span className="text-slate-500 text-xs">{t('EUR')}</span>
                       <button
                         className="ml-auto text-red-400 hover:text-red-300"
-                        title="IST-Punkt entfernen"
+                        title={t('IST-Punkt entfernen')}
                         onClick={() => removePoint(p.id)}
                       >
                         ✕

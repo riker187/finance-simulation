@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import type { FinancialEffect } from '../types';
 import { DEFAULT_SITUATION_CATEGORY } from '../types';
 import { addMonths, monthsBetween, formatMonthShort, sortMonths } from '../utils/months';
+import { useT, getLang } from '../utils/i18n';
 
 const CELL_W = 56;
 const CELL_H = 36;
@@ -38,6 +39,7 @@ export function TimelineEditor() {
   const paintEntries = useStore((s) => s.paintEntries);
   const paintEffectEntries = useStore((s) => s.paintEffectEntries);
   const reorderSituations = useStore((s) => s.reorderSituations);
+  const t = useT();
 
   const scenario = scenarios.find((s) => s.id === activeScenarioId);
 
@@ -128,11 +130,12 @@ export function TimelineEditor() {
   if (!scenario) {
     return (
       <div className="flex items-center justify-center h-48 text-slate-600 text-sm">
-        Kein Szenario ausgewählt.
+        {t('Kein Szenario ausgewählt.')}
       </div>
     );
   }
 
+  const lang = getLang();
   const endMonth = addMonths(scenario.startMonth, scenario.durationMonths - 1);
   const months = monthsBetween(scenario.startMonth, endMonth);
 
@@ -253,7 +256,7 @@ export function TimelineEditor() {
               className="shrink-0 flex items-center px-3 text-xs font-medium text-slate-500 uppercase tracking-wide"
               style={{ width: LABEL_W }}
             >
-              Situation
+              {t('Situation')}
             </div>
             {months.map((month) => {
               const annText = annotationsByMonth.get(month);
@@ -263,7 +266,7 @@ export function TimelineEditor() {
                   className="shrink-0 relative flex items-center justify-center text-xs text-slate-500 border-l border-slate-800"
                   style={{ width: CELL_W }}
                 >
-                  {formatMonthShort(month)}
+                  {formatMonthShort(month, lang)}
                   {annText && (
                     <span
                       className="absolute top-0.5 right-1 w-1.5 h-1.5 rounded-full bg-slate-400"
@@ -278,7 +281,7 @@ export function TimelineEditor() {
 
         {situations.length === 0 && (
           <div className="py-8 text-center text-slate-600 text-sm">
-            Erstelle zuerst Situationen in der linken Seitenleiste.
+            {t('Erstelle zuerst Situationen in der linken Seitenleiste.')}
           </div>
         )}
 
@@ -289,7 +292,7 @@ export function TimelineEditor() {
                 className="shrink-0 flex items-center px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500"
                 style={{ width: LABEL_W }}
               >
-                {category}
+                {t(category)}
               </div>
               <div className="flex-1" />
             </div>
@@ -336,14 +339,14 @@ export function TimelineEditor() {
                       onDragStart={(e) => handleDragStart(e, sit.index)}
                       onDragEnd={handleDragEnd}
                     >
-                      <span className="text-slate-600 hover:text-slate-400 text-xs shrink-0 leading-none" title="Verschieben">
+                      <span className="text-slate-600 hover:text-slate-400 text-xs shrink-0 leading-none" title={t('Verschieben')}>
                         ⠿
                       </span>
                       {sit.effects.length > 0 ? (
                         <button
                           className="text-slate-500 hover:text-slate-200 text-[11px] leading-none w-4"
                           onClick={() => toggleExpanded(sit.id)}
-                          title={isExpanded ? 'Auswirkungen einklappen' : 'Auswirkungen aufklappen'}
+                          title={isExpanded ? t('Auswirkungen einklappen') : t('Auswirkungen aufklappen')}
                         >
                           {isExpanded ? '▾' : '▸'}
                         </button>
@@ -354,7 +357,7 @@ export function TimelineEditor() {
                       <span className="text-xs text-slate-300 truncate">{sit.name}</span>
                       {hasAnyEffectOverrides && (
                         <span className="text-[10px] text-blue-300 border border-blue-400/40 rounded px-1 py-0.5">
-                          individuell
+                          {t('individuell')}
                         </span>
                       )}
                     </div>
@@ -427,7 +430,7 @@ export function TimelineEditor() {
                           {customizedMonths.has(month) && (
                             <div
                               className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-blue-300 border border-slate-900"
-                              title="In diesem Monat gibt es individuelle Effekt-Anpassungen"
+                              title={t('In diesem Monat gibt es individuelle Effekt-Anpassungen')}
                             />
                           )}
                         </div>
@@ -457,8 +460,8 @@ export function TimelineEditor() {
                             style={{ width: LABEL_W }}
                             title={
                               disabledMonths.size > 0
-                                ? 'In einzelnen Monaten deaktiviert'
-                                : 'Folgt aktuell der Situation'
+                                ? t('In einzelnen Monaten deaktiviert')
+                                : t('Folgt aktuell der Situation')
                             }
                           >
                             <span
@@ -467,10 +470,10 @@ export function TimelineEditor() {
                             >
                               {effect.category === 'income' ? '+' : '-'}
                             </span>
-                            <span className="text-[11px] text-slate-400 truncate">{effect.label || 'Auswirkung'}</span>
+                            <span className="text-[11px] text-slate-400 truncate">{effect.label || t('Auswirkung')}</span>
                             {disabledMonths.size > 0 && (
                               <span className="text-[10px] text-blue-300 border border-blue-400/40 rounded px-1 py-0.5">
-                                individuell
+                                {t('individuell')}
                               </span>
                             )}
                           </div>
@@ -547,7 +550,7 @@ export function TimelineEditor() {
 
         {situations.length > 0 && (
           <div className="px-4 py-2 text-xs text-slate-600 italic">
-            Situationen: klicken & ziehen zum Aktivieren/Deaktivieren · ▸ Auswirkungen aufklappen und bei Bedarf einzeln steuern.
+            {t('Situationen: klicken & ziehen zum Aktivieren/Deaktivieren · ▸ Auswirkungen aufklappen und bei Bedarf einzeln steuern.')}
           </div>
         )}
       </div>
