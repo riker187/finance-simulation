@@ -4,6 +4,7 @@ import type { Scenario } from '../types';
 import { currentMonth } from '../utils/months';
 import { uid } from '../utils/uid';
 import { SITUATION_COLORS } from '../types';
+import { useT } from '../utils/i18n';
 
 function ScenarioFormModal({
   initial,
@@ -14,7 +15,8 @@ function ScenarioFormModal({
   onSave: (s: Scenario) => void;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState(initial?.name ?? 'Neues Szenario');
+  const t = useT();
+  const [name, setName] = useState(initial?.name ?? t('Neues Szenario'));
   const [color, setColor] = useState(initial?.color ?? SITUATION_COLORS[1]);
   const [initialBalance, setInitialBalance] = useState(initial?.initialBalance ?? 0);
   const [startMonth, setStartMonth] = useState(initial?.startMonth ?? currentMonth());
@@ -39,11 +41,11 @@ function ScenarioFormModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl bg-slate-800 border border-slate-700 shadow-2xl p-6 space-y-4">
         <h2 className="text-lg font-semibold text-white">
-          {initial ? 'Szenario bearbeiten' : 'Neues Szenario'}
+          {initial ? t('Szenario bearbeiten') : t('Neues Szenario')}
         </h2>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Name</label>
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">{t('Name')}</label>
           <input
             className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
             value={name}
@@ -53,7 +55,7 @@ function ScenarioFormModal({
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Farbe</label>
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">{t('Farbe')}</label>
           <div className="flex gap-2 flex-wrap">
             {SITUATION_COLORS.map((c) => (
               <button
@@ -71,7 +73,7 @@ function ScenarioFormModal({
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
-              Startkapital (€)
+              {t('Startkapital (€)')}
             </label>
             <input
               type="number"
@@ -82,7 +84,7 @@ function ScenarioFormModal({
           </div>
           <div className="space-y-1">
             <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
-              Dauer (Monate)
+              {t('Dauer (Monate)')}
             </label>
             <input
               type="number"
@@ -97,7 +99,7 @@ function ScenarioFormModal({
 
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
-            Startmonat
+            {t('Startmonat')}
           </label>
           <input
             type="month"
@@ -112,13 +114,13 @@ function ScenarioFormModal({
             className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white transition-colors"
             onClick={onCancel}
           >
-            Abbrechen
+            {t('Abbrechen')}
           </button>
           <button
             className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
             onClick={handleSave}
           >
-            Speichern
+            {t('Speichern')}
           </button>
         </div>
       </div>
@@ -133,6 +135,7 @@ export function ScenarioTabs() {
   const addScenario = useStore((s) => s.addScenario);
   const updateScenario = useStore((s) => s.updateScenario);
   const deleteScenario = useStore((s) => s.deleteScenario);
+  const t = useT();
 
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<Scenario | null>(null);
@@ -142,7 +145,7 @@ export function ScenarioTabs() {
     const copy: Scenario = {
       ...sc,
       id: uid(),
-      name: `Kopie von ${sc.name}`,
+      name: t('Kopie von {name}', { name: sc.name }),
       entries: sc.entries.map((e) => ({ ...e, id: uid() })),
       effectEntries: sc.effectEntries.map((e) => ({ ...e, id: uid() })),
       savingsBalancePoints: sc.savingsBalancePoints.map((p) => ({ ...p, id: uid() })),
@@ -172,14 +175,14 @@ export function ScenarioTabs() {
               <button
                 className="w-4 h-4 rounded-full bg-slate-600 hover:bg-blue-600 text-white text-xs flex items-center justify-center transition-colors leading-none"
                 onClick={() => setEditing(sc)}
-                title="Bearbeiten"
+                title={t('Bearbeiten')}
               >
                 ✎
               </button>
               <button
                 className="w-4 h-4 rounded-full bg-slate-600 hover:bg-emerald-600 text-white text-xs flex items-center justify-center transition-colors leading-none"
                 onClick={() => duplicateScenario(sc)}
-                title="Duplizieren"
+                title={t('Duplizieren')}
               >
                 ⧉
               </button>
@@ -187,7 +190,7 @@ export function ScenarioTabs() {
                 <button
                   className="w-4 h-4 rounded-full bg-slate-600 hover:bg-red-600 text-white text-xs flex items-center justify-center transition-colors leading-none"
                   onClick={() => setConfirmDelete(sc.id)}
-                  title="Löschen"
+                  title={t('Löschen')}
                 >
                   ✕
                 </button>
@@ -201,19 +204,19 @@ export function ScenarioTabs() {
         className="px-3 py-1.5 rounded-lg text-sm text-slate-500 hover:text-blue-400 hover:bg-slate-800 transition-colors whitespace-nowrap"
         onClick={() => setShowNew(true)}
       >
-        + Szenario
+        {t('+ Szenario')}
       </button>
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4 max-w-sm w-full mx-4">
-            <p className="text-white text-sm">Szenario wirklich löschen?</p>
+            <p className="text-white text-sm">{t('Szenario wirklich löschen?')}</p>
             <div className="flex gap-3 justify-end">
               <button
                 className="px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white"
                 onClick={() => setConfirmDelete(null)}
               >
-                Abbrechen
+                {t('Abbrechen')}
               </button>
               <button
                 className="px-3 py-1.5 rounded-lg text-sm bg-red-600 hover:bg-red-500 text-white"
@@ -222,7 +225,7 @@ export function ScenarioTabs() {
                   setConfirmDelete(null);
                 }}
               >
-                Löschen
+                {t('Löschen')}
               </button>
             </div>
           </div>

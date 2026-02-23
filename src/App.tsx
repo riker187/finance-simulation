@@ -10,6 +10,7 @@ import { ComparisonChart } from './components/ComparisonChart';
 import { ImportExportMenu } from './components/ImportExportMenu';
 import { AuditLogPanel } from './components/AuditLogPanel';
 import { ProfileSwitcher } from './components/ProfileSwitcher';
+import { useT, getLang, setLang, formatEurLocalized } from './utils/i18n';
 
 const SIDEBAR_MIN_W = 220;
 const SIDEBAR_MAX_W = 520;
@@ -53,6 +54,7 @@ export function App() {
   const scenarios = useStore((s) => s.scenarios);
   const activeScenarioId = useStore((s) => s.activeScenarioId);
   const syncStatus = useRealtimeSync();
+  const t = useT();
 
   const activeScenario = scenarios.find((s) => s.id === activeScenarioId);
 
@@ -208,21 +210,30 @@ export function App() {
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-sm">📈</div>
           <div>
-            <h1 className="text-sm font-semibold text-white leading-none">Finanz-Simulator</h1>
-            <p className="text-xs text-slate-500 leading-none mt-0.5">Was-wäre-wenn Planung</p>
+            <h1 className="text-sm font-semibold text-white leading-none">{t('Finanz-Simulator')}</h1>
+            <p className="text-xs text-slate-500 leading-none mt-0.5">{t('Was-wäre-wenn Planung')}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs text-slate-400" title="Synchronisationsstatus">
+          <div className="flex items-center gap-1.5 text-xs text-slate-400" title={t('Synchronisationsstatus')}>
             <span className={`w-2 h-2 rounded-full ${syncDotClass}`} />
             <span>Sync {syncStatus}</span>
           </div>
           <ProfileSwitcher />
           <button
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs bg-slate-800 hover:bg-slate-700 transition-colors font-mono"
+            onClick={() => setLang(getLang() === 'de' ? 'en' : 'de')}
+            title="Language / Sprache"
+          >
+            <span className={getLang() === 'de' ? 'text-white font-semibold' : 'text-slate-500'}>DE</span>
+            <span className="text-slate-600 mx-0.5">|</span>
+            <span className={getLang() === 'en' ? 'text-white font-semibold' : 'text-slate-500'}>EN</span>
+          </button>
+          <button
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
             onClick={() => setShowAuditLog(true)}
-            title="Änderungsprotokoll"
+            title={t('Änderungsprotokoll')}
           >
             📋
           </button>
@@ -236,7 +247,7 @@ export function App() {
               }`}
               onClick={() => setCompareMode(!compareMode)}
             >
-              <span>{compareMode ? '← Zurück' : '⇄ Vergleich'}</span>
+              <span>{compareMode ? t('← Zurück') : t('⇄ Vergleich')}</span>
             </button>
           )}
         </div>
@@ -245,13 +256,13 @@ export function App() {
       {updateAvailable && (
         <div className="shrink-0 bg-amber-950/80 border-b border-amber-700/70 px-6 py-2 flex items-center justify-between gap-3">
           <span className="text-xs text-amber-200">
-            Neue UI-Version verfügbar. Bitte neu laden, um das Update zu sehen.
+            {t('Neue UI-Version verfügbar. Bitte neu laden, um das Update zu sehen.')}
           </span>
           <button
             className="px-2.5 py-1 rounded-md text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold"
             onClick={() => window.location.reload()}
           >
-            Neu laden
+            {t('Neu laden')}
           </button>
         </div>
       )}
@@ -259,8 +270,8 @@ export function App() {
       {compareMode ? (
         <div className="flex-1 flex flex-col min-h-0 p-4">
           <div className="mb-4">
-            <h2 className="text-base font-semibold text-white">Szenariovergleich</h2>
-            <p className="text-xs text-slate-500 mt-0.5">{scenarios.length} Szenarien im Vergleich</p>
+            <h2 className="text-base font-semibold text-white">{t('Szenariovergleich')}</h2>
+            <p className="text-xs text-slate-500 mt-0.5">{t('{count} Szenarien im Vergleich', { count: scenarios.length })}</p>
           </div>
           <div className="flex-1 min-h-0 rounded-xl bg-slate-900 border border-slate-800 p-4">
             <ComparisonChart />
@@ -270,10 +281,10 @@ export function App() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-800">
-                  <th className="text-left px-4 py-2.5 text-slate-500 font-medium">Szenario</th>
-                  <th className="text-right px-4 py-2.5 text-slate-500 font-medium">Startkapital</th>
-                  <th className="text-right px-4 py-2.5 text-slate-500 font-medium">Dauer</th>
-                  <th className="text-right px-4 py-2.5 text-slate-500 font-medium">Situationen</th>
+                  <th className="text-left px-4 py-2.5 text-slate-500 font-medium">{t('Szenario')}</th>
+                  <th className="text-right px-4 py-2.5 text-slate-500 font-medium">{t('Startkapital')}</th>
+                  <th className="text-right px-4 py-2.5 text-slate-500 font-medium">{t('Dauer')}</th>
+                  <th className="text-right px-4 py-2.5 text-slate-500 font-medium">{t('Situationen')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -286,13 +297,9 @@ export function App() {
                       </div>
                     </td>
                     <td className="px-4 py-2.5 text-right text-slate-300">
-                      {sc.initialBalance.toLocaleString('de-DE', {
-                        style: 'currency',
-                        currency: 'EUR',
-                        maximumFractionDigits: 0,
-                      })}
+                      {formatEurLocalized(sc.initialBalance)}
                     </td>
-                    <td className="px-4 py-2.5 text-right text-slate-300">{sc.durationMonths} Mo.</td>
+                    <td className="px-4 py-2.5 text-right text-slate-300">{sc.durationMonths} {t('Mo.')}</td>
                     <td className="px-4 py-2.5 text-right text-slate-300">
                       {new Set(sc.entries.map((e) => e.situationId)).size}
                     </td>
@@ -309,7 +316,7 @@ export function App() {
           <div
             className="w-1.5 shrink-0 cursor-col-resize bg-slate-900 hover:bg-blue-500/60 active:bg-blue-500/80 transition-colors"
             onMouseDown={startSidebarResize}
-            title="Breite der Situationsspalte anpassen"
+            title={t('Breite der Situationsspalte anpassen')}
           />
 
           <div className="flex flex-col flex-1 min-w-0 min-h-0">
@@ -325,7 +332,7 @@ export function App() {
               >
                 <div className="min-w-0">
                   <div className="px-4 py-2 flex items-center gap-2 border-b border-slate-800/50">
-                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Zeitplan</span>
+                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t('Zeitplan')}</span>
                   </div>
                   <TimelineEditor />
                 </div>
@@ -334,13 +341,13 @@ export function App() {
               <div
                 className="h-1.5 shrink-0 cursor-row-resize bg-slate-900 hover:bg-blue-500/60 active:bg-blue-500/80 transition-colors"
                 onMouseDown={startTimelineResize}
-                title="Hoehe des Zeitplans anpassen"
+                title={t('Hoehe des Zeitplans anpassen')}
               />
 
               <div className="flex-1 min-h-0 flex flex-col">
                 <div className="mb-2 px-4 pt-4 flex items-center gap-3 flex-wrap">
                   <span className="text-xs font-medium text-slate-500 uppercase tracking-wide shrink-0">
-                    Kontostandverlauf
+                    {t('Kontostandverlauf')}
                   </span>
                   {otherScenarios.map((sc) => {
                     const active = cleanOverlayIds.includes(sc.id);
@@ -358,7 +365,7 @@ export function App() {
                               }
                             : { borderColor: '#334155', color: '#64748b' }
                         }
-                        title={active ? `${sc.name} ausblenden` : `${sc.name} einblenden`}
+                        title={active ? t('{name} ausblenden', { name: sc.name }) : t('{name} einblenden', { name: sc.name })}
                       >
                         <span
                           className="w-1.5 h-1.5 rounded-full shrink-0"

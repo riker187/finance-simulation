@@ -13,19 +13,18 @@ import {
 import { useStore } from '../store';
 import { simulateScenario } from '../simulation';
 import { formatMonthShort, formatMonthLong, monthsBetween, addMonths } from '../utils/months';
-
-function formatEur(n: number): string {
-  return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
-}
+import { useT, formatEurLocalized, getLang } from '../utils/i18n';
 
 export function ComparisonChart() {
   const situations = useStore((s) => s.situations);
   const scenarios = useStore((s) => s.scenarios);
+  const t = useT();
+  const lang = getLang();
 
   if (scenarios.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-slate-600 text-sm">
-        Keine Szenarien vorhanden.
+        {t('Keine Szenarien vorhanden.')}
       </div>
     );
   }
@@ -71,7 +70,7 @@ export function ComparisonChart() {
     if (!active || !payload?.length || !label) return null;
     return (
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 shadow-2xl text-xs space-y-1.5 min-w-[180px]">
-        <div className="text-slate-300 font-semibold text-sm">{formatMonthLong(label)}</div>
+        <div className="text-slate-300 font-semibold text-sm">{formatMonthLong(label, lang)}</div>
         <div className="border-t border-slate-700 pt-1.5 space-y-1">
           {payload.map((entry) => {
             const sc = scenarios.find((s) => s.id === entry.dataKey);
@@ -83,7 +82,7 @@ export function ComparisonChart() {
                   <span className="text-slate-400">{sc.name}</span>
                 </span>
                 <span className="font-semibold" style={{ color: entry.value >= 0 ? 'white' : '#fb7185' }}>
-                  {formatEur(entry.value)}
+                  {formatEurLocalized(entry.value)}
                 </span>
               </div>
             );
@@ -103,7 +102,7 @@ export function ComparisonChart() {
             <span className="text-slate-400">{sc.name}</span>
             {lastPoint && (
               <span className="font-semibold" style={{ color: lastPoint.balance >= 0 ? sc.color : '#fb7185' }}>
-                {formatEur(lastPoint.balance)}
+                {formatEurLocalized(lastPoint.balance)}
               </span>
             )}
           </div>
@@ -116,7 +115,7 @@ export function ComparisonChart() {
     <div className="w-full h-full flex flex-col relative">
       <div className="absolute right-2 top-0 z-10 pointer-events-none">
         <span className="text-[11px] px-2 py-1 rounded-md bg-red-950/80 border border-red-500/60 text-red-200">
-          Kritischer Bereich: Kontostand unter 0 EUR
+          {t('Kritischer Bereich: Kontostand unter 0 EUR')}
         </span>
       </div>
       <ResponsiveContainer width="100%" height="100%">
@@ -124,7 +123,7 @@ export function ComparisonChart() {
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
           <XAxis
             dataKey="month"
-            tickFormatter={formatMonthShort}
+            tickFormatter={(m) => formatMonthShort(m, lang)}
             tick={{ fill: '#64748b', fontSize: 11 }}
             axisLine={{ stroke: '#1e293b' }}
             tickLine={false}

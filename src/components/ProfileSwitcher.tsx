@@ -12,6 +12,7 @@ import {
   clearProfilePin,
   type Profile,
 } from '../utils/profiles';
+import { useT } from '../utils/i18n';
 
 const PROFILE_COLORS = [
   '#6366f1', // indigo
@@ -73,6 +74,7 @@ export function ProfileSwitcher() {
   const [profiles, setProfiles] = useState<Profile[]>(() => getProfiles());
   const activeId = getActiveProfileId();
   const activeProfile = profiles.find((p) => p.id === activeId) ?? profiles[0];
+  const t = useT();
 
   const [creatingNew, setCreatingNew] = useState(false);
   const [newName, setNewName] = useState('');
@@ -146,8 +148,8 @@ export function ProfileSwitcher() {
 
   const handleSetPin = () => {
     if (!pinManageId) return;
-    if (pinNew.length !== 4) { setPinManageError('PIN muss genau 4 Ziffern haben'); return; }
-    if (pinNew !== pinConfirm) { setPinManageError('PINs stimmen nicht überein'); return; }
+    if (pinNew.length !== 4) { setPinManageError(t('PIN muss genau 4 Ziffern haben')); return; }
+    if (pinNew !== pinConfirm) { setPinManageError(t('PINs stimmen nicht überein')); return; }
     setProfilePin(pinManageId, pinNew);
     refreshProfiles();
     setPinManageId(null);
@@ -156,7 +158,7 @@ export function ProfileSwitcher() {
   const handleRemovePin = () => {
     if (!pinManageId) return;
     const ok = verifyProfilePin(pinManageId, pinCurrent);
-    if (!ok) { setPinManageError('Falscher PIN'); setPinCurrent(''); return; }
+    if (!ok) { setPinManageError(t('Falscher PIN')); setPinCurrent(''); return; }
     clearProfilePin(pinManageId);
     refreshProfiles();
     setPinManageId(null);
@@ -165,9 +167,9 @@ export function ProfileSwitcher() {
   const handleChangePin = () => {
     if (!pinManageId) return;
     const ok = verifyProfilePin(pinManageId, pinCurrent);
-    if (!ok) { setPinManageError('Aktueller PIN falsch'); setPinCurrent(''); return; }
-    if (pinNew.length !== 4) { setPinManageError('Neuer PIN muss 4 Ziffern haben'); return; }
-    if (pinNew !== pinConfirm) { setPinManageError('Neue PINs stimmen nicht überein'); return; }
+    if (!ok) { setPinManageError(t('Aktueller PIN falsch')); setPinCurrent(''); return; }
+    if (pinNew.length !== 4) { setPinManageError(t('Neuer PIN muss 4 Ziffern haben')); return; }
+    if (pinNew !== pinConfirm) { setPinManageError(t('Neue PINs stimmen nicht überein')); return; }
     setProfilePin(pinManageId, pinNew);
     refreshProfiles();
     setPinManageId(null);
@@ -244,7 +246,7 @@ export function ProfileSwitcher() {
                           <button
                             onClick={() => { setEditingId(profile.id); setEditingName(profile.name); }}
                             className="text-slate-400 hover:text-white p-0.5 rounded transition-colors"
-                            title="Umbenennen"
+                            title={t('Umbenennen')}
                           >
                             <svg className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
                               <path d="M11 2l3 3-8 8H3v-3L11 2z" strokeLinejoin="round" />
@@ -254,7 +256,7 @@ export function ProfileSwitcher() {
                           <button
                             onClick={() => openPinManage(profile.id)}
                             className={`p-0.5 rounded transition-colors ${profile.pinHash ? 'text-indigo-400 hover:text-indigo-300' : 'text-slate-400 hover:text-white'}`}
-                            title={profile.pinHash ? 'PIN verwalten' : 'PIN festlegen'}
+                            title={profile.pinHash ? t('PIN verwalten') : t('PIN festlegen')}
                           >
                             <LockIcon locked={Boolean(profile.pinHash)} />
                           </button>
@@ -263,7 +265,7 @@ export function ProfileSwitcher() {
                             <button
                               onClick={() => handleDelete(profile.id)}
                               className="text-slate-400 hover:text-rose-400 p-0.5 rounded transition-colors"
-                              title="Löschen"
+                              title={t('Löschen')}
                             >
                               <svg className="w-3 h-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
                                 <path d="M3 3l10 10M13 3L3 13" strokeLinecap="round" />
@@ -290,7 +292,7 @@ export function ProfileSwitcher() {
               <div className="px-3 py-2 space-y-2">
                 <input
                   autoFocus
-                  placeholder="Profilname"
+                  placeholder={t('Profilname')}
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleCreateConfirm(); if (e.key === 'Escape') { setCreatingNew(false); setNewName(''); } }}
@@ -308,10 +310,10 @@ export function ProfileSwitcher() {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={handleCreateConfirm} disabled={!newName.trim()} className="flex-1 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg py-1 transition-colors">
-                    Erstellen
+                    {t('Erstellen')}
                   </button>
                   <button onClick={() => { setCreatingNew(false); setNewName(''); }} className="text-xs text-slate-400 hover:text-white px-2 py-1 rounded-lg transition-colors">
-                    Abbrechen
+                    {t('Abbrechen')}
                   </button>
                 </div>
               </div>
@@ -320,7 +322,7 @@ export function ProfileSwitcher() {
                 <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M8 3v10M3 8h10" strokeLinecap="round" />
                 </svg>
-                Neues Profil
+                {t('Neues Profil')}
               </button>
             )}
           </div>
@@ -333,34 +335,34 @@ export function ProfileSwitcher() {
           <div className="w-72 rounded-2xl bg-slate-800 border border-slate-700 shadow-2xl p-6 space-y-4">
             <div className="flex items-center gap-2">
               <span className="text-indigo-400"><LockIcon locked={true} /></span>
-              <h3 className="text-white font-semibold text-sm">PIN eingeben</h3>
+              <h3 className="text-white font-semibold text-sm">{t('PIN eingeben')}</h3>
             </div>
             <p className="text-slate-400 text-xs">
-              Profil: <span className="text-slate-200 font-medium">{profiles.find((p) => p.id === pinUnlockId)?.name}</span>
+              {t('Profil: {name}', { name: profiles.find((p) => p.id === pinUnlockId)?.name ?? '' })}
             </p>
             <PinInput
-              label="PIN (4 Stellen)"
+              label={t('PIN (4 Stellen)')}
               value={pinUnlockEntry}
               onChange={setPinUnlockEntry}
               onEnter={handlePinUnlock}
               autoFocus
             />
             {pinUnlockError && (
-              <p className="text-red-400 text-xs text-center">Falscher PIN. Bitte erneut versuchen.</p>
+              <p className="text-red-400 text-xs text-center">{t('Falscher PIN. Bitte erneut versuchen.')}</p>
             )}
             <div className="flex gap-2">
               <button
                 onClick={() => setPinUnlockId(null)}
                 className="flex-1 px-3 py-2 text-sm text-slate-400 hover:text-white rounded-lg transition-colors"
               >
-                Abbrechen
+                {t('Abbrechen')}
               </button>
               <button
                 onClick={handlePinUnlock}
                 disabled={pinUnlockEntry.length !== 4}
                 className="flex-1 px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
               >
-                Entsperren
+                {t('Entsperren')}
               </button>
             </div>
           </div>
@@ -373,12 +375,12 @@ export function ProfileSwitcher() {
           <div className="w-80 rounded-2xl bg-slate-800 border border-slate-700 shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-white font-semibold text-sm">
-                PIN {pinManageHasPin ? 'verwalten' : 'festlegen'}
+                {pinManageHasPin ? t('PIN verwalten') : t('PIN festlegen')}
               </h3>
               <button onClick={() => setPinManageId(null)} className="text-slate-400 hover:text-white text-lg leading-none">✕</button>
             </div>
             <p className="text-slate-400 text-xs">
-              Profil: <span className="text-slate-200 font-medium">{pinManageProfile?.name}</span>
+              {t('Profil: {name}', { name: pinManageProfile?.name ?? '' })}
             </p>
 
             {pinManageStep === 'main' && (
@@ -387,34 +389,34 @@ export function ProfileSwitcher() {
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-950/50 border border-indigo-500/30">
                       <span className="text-indigo-400 text-xs"><LockIcon locked={true} /></span>
-                      <span className="text-indigo-300 text-xs">PIN ist aktiv</span>
+                      <span className="text-indigo-300 text-xs">{t('PIN ist aktiv')}</span>
                     </div>
                     <div className="flex gap-2">
                       <button
                         onClick={() => { setPinManageStep('remove'); setPinCurrent(''); setPinManageError(''); }}
                         className="flex-1 px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors"
                       >
-                        PIN entfernen
+                        {t('PIN entfernen')}
                       </button>
                       <button
                         onClick={() => { setPinManageStep('change'); setPinCurrent(''); setPinNew(''); setPinConfirm(''); setPinManageError(''); }}
                         className="flex-1 px-3 py-2 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
                       >
-                        PIN ändern
+                        {t('PIN ändern')}
                       </button>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <PinInput label="Neuer PIN (4 Ziffern)" value={pinNew} onChange={setPinNew} autoFocus />
-                    <PinInput label="PIN bestätigen" value={pinConfirm} onChange={setPinConfirm} onEnter={handleSetPin} />
+                    <PinInput label={t('Neuer PIN (4 Ziffern)')} value={pinNew} onChange={setPinNew} autoFocus />
+                    <PinInput label={t('PIN bestätigen')} value={pinConfirm} onChange={setPinConfirm} onEnter={handleSetPin} />
                     {pinManageError && <p className="text-red-400 text-xs">{pinManageError}</p>}
                     <button
                       onClick={handleSetPin}
                       disabled={pinNew.length !== 4 || pinConfirm.length !== 4}
                       className="w-full px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
                     >
-                      PIN festlegen
+                      {t('PIN festlegen')}
                     </button>
                   </div>
                 )}
@@ -423,18 +425,18 @@ export function ProfileSwitcher() {
 
             {pinManageStep === 'remove' && (
               <div className="space-y-3">
-                <PinInput label="Aktuellen PIN eingeben" value={pinCurrent} onChange={setPinCurrent} onEnter={handleRemovePin} autoFocus />
+                <PinInput label={t('Aktuellen PIN eingeben')} value={pinCurrent} onChange={setPinCurrent} onEnter={handleRemovePin} autoFocus />
                 {pinManageError && <p className="text-red-400 text-xs">{pinManageError}</p>}
                 <div className="flex gap-2">
                   <button onClick={() => setPinManageStep('main')} className="flex-1 px-3 py-2 text-sm text-slate-400 hover:text-white rounded-lg transition-colors">
-                    Zurück
+                    {t('Zurück')}
                   </button>
                   <button
                     onClick={handleRemovePin}
                     disabled={pinCurrent.length !== 4}
                     className="flex-1 px-3 py-2 text-sm bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
                   >
-                    PIN entfernen
+                    {t('PIN entfernen')}
                   </button>
                 </div>
               </div>
@@ -442,20 +444,20 @@ export function ProfileSwitcher() {
 
             {pinManageStep === 'change' && (
               <div className="space-y-3">
-                <PinInput label="Aktueller PIN" value={pinCurrent} onChange={setPinCurrent} autoFocus />
-                <PinInput label="Neuer PIN (4 Ziffern)" value={pinNew} onChange={setPinNew} />
-                <PinInput label="Neuen PIN bestätigen" value={pinConfirm} onChange={setPinConfirm} onEnter={handleChangePin} />
+                <PinInput label={t('Aktueller PIN')} value={pinCurrent} onChange={setPinCurrent} autoFocus />
+                <PinInput label={t('Neuer PIN (4 Ziffern)')} value={pinNew} onChange={setPinNew} />
+                <PinInput label={t('Neuen PIN bestätigen')} value={pinConfirm} onChange={setPinConfirm} onEnter={handleChangePin} />
                 {pinManageError && <p className="text-red-400 text-xs">{pinManageError}</p>}
                 <div className="flex gap-2">
                   <button onClick={() => setPinManageStep('main')} className="flex-1 px-3 py-2 text-sm text-slate-400 hover:text-white rounded-lg transition-colors">
-                    Zurück
+                    {t('Zurück')}
                   </button>
                   <button
                     onClick={handleChangePin}
                     disabled={pinCurrent.length !== 4 || pinNew.length !== 4 || pinConfirm.length !== 4}
                     className="flex-1 px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
                   >
-                    PIN ändern
+                    {t('PIN ändern')}
                   </button>
                 </div>
               </div>
