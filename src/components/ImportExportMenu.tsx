@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import { useStore } from "../store";
 import type { Situation, Scenario } from "../types";
+import { useT, getLang } from "../utils/i18n";
 
 interface ExportFile {
   version: number;
@@ -20,6 +21,7 @@ export function ImportExportMenu() {
   const scenarios = useStore((s) => s.scenarios);
   const activeScenarioId = useStore((s) => s.activeScenarioId);
   const loadData = useStore((s) => s.loadData);
+  const t = useT();
 
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<ExportFile | null>(null);
@@ -59,7 +61,7 @@ export function ImportExportMenu() {
 
   const handlePdfExport = async () => {
     if (!activeScenario) {
-      setPdfError("Kein aktives Szenario gefunden.");
+      setPdfError(t('Kein aktives Szenario gefunden.'));
       setOpen(false);
       return;
     }
@@ -69,7 +71,7 @@ export function ImportExportMenu() {
       exportScenarioPdf(activeScenario, situations);
       setOpen(false);
     } catch {
-      setPdfError("PDF-Export fehlgeschlagen. Bitte erneut versuchen.");
+      setPdfError(t('PDF-Export fehlgeschlagen. Bitte erneut versuchen.'));
       setOpen(false);
     }
   };
@@ -87,7 +89,7 @@ export function ImportExportMenu() {
         setImportError(null);
         setPending(parsed);
       } catch {
-        setImportError("Die Datei konnte nicht gelesen werden. Bitte eine gueltige Export-Datei waehlen.");
+        setImportError(t('Die Datei konnte nicht gelesen werden. Bitte eine gültige Export-Datei wählen.'));
       }
     };
     reader.readAsText(file);
@@ -100,16 +102,18 @@ export function ImportExportMenu() {
     setPending(null);
   };
 
+  const lang = getLang();
+
   return (
     <>
       <div ref={menuRef} className="relative">
         <button
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
           onClick={() => setOpen((v) => !v)}
-          title="Daten importieren oder exportieren"
+          title={t('Daten importieren oder exportieren')}
         >
           <span>⇅</span>
-          <span>Daten</span>
+          <span>{t('Daten')}</span>
         </button>
 
         {open && (
@@ -119,14 +123,14 @@ export function ImportExportMenu() {
               onClick={handleExport}
             >
               <span className="text-base leading-none">↓</span>
-              Exportieren (JSON)
+              {t('Exportieren (JSON)')}
             </button>
             <button
               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors text-left"
               onClick={handlePdfExport}
             >
               <span className="text-base leading-none">PDF</span>
-              Szenario als PDF
+              {t('Szenario als PDF')}
             </button>
             <div className="border-t border-slate-700" />
             <button
@@ -134,7 +138,7 @@ export function ImportExportMenu() {
               onClick={() => fileRef.current?.click()}
             >
               <span className="text-base leading-none">↑</span>
-              Importieren
+              {t('Importieren')}
             </button>
           </div>
         )}
@@ -151,14 +155,14 @@ export function ImportExportMenu() {
       {importError && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full mx-4 space-y-4">
-            <h2 className="text-white font-semibold">Import fehlgeschlagen</h2>
+            <h2 className="text-white font-semibold">{t('Import fehlgeschlagen')}</h2>
             <p className="text-sm text-slate-400">{importError}</p>
             <div className="flex justify-end">
               <button
                 className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm transition-colors"
                 onClick={() => setImportError(null)}
               >
-                OK
+                {t('OK')}
               </button>
             </div>
           </div>
@@ -168,14 +172,14 @@ export function ImportExportMenu() {
       {pdfError && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full mx-4 space-y-4">
-            <h2 className="text-white font-semibold">PDF-Export fehlgeschlagen</h2>
+            <h2 className="text-white font-semibold">{t('PDF-Export fehlgeschlagen')}</h2>
             <p className="text-sm text-slate-400">{pdfError}</p>
             <div className="flex justify-end">
               <button
                 className="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm transition-colors"
                 onClick={() => setPdfError(null)}
               >
-                OK
+                {t('OK')}
               </button>
             </div>
           </div>
@@ -185,24 +189,24 @@ export function ImportExportMenu() {
       {pending && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full mx-4 space-y-4">
-            <h2 className="text-white font-semibold">Daten importieren?</h2>
+            <h2 className="text-white font-semibold">{t('Daten importieren?')}</h2>
             <p className="text-sm text-slate-400">
-              Die aktuellen Daten werden durch den Import ueberschrieben. Diese Aktion kann nicht rueckgaengig gemacht werden.
+              {t('Die aktuellen Daten werden durch den Import überschrieben. Diese Aktion kann nicht rückgängig gemacht werden.')}
             </p>
             <div className="rounded-lg bg-slate-900 border border-slate-700 px-4 py-3 text-xs text-slate-400 space-y-1">
               <div className="flex justify-between">
-                <span>Situationen</span>
+                <span>{t('Situationen')}</span>
                 <span className="text-white font-medium">{pending.situations.length}</span>
               </div>
               <div className="flex justify-between">
-                <span>Szenarien</span>
+                <span>{t('Szenarien')}</span>
                 <span className="text-white font-medium">{pending.scenarios.length}</span>
               </div>
               {pending.exportedAt && (
                 <div className="flex justify-between">
-                  <span>Exportiert am</span>
+                  <span>{t('Exportiert am')}</span>
                   <span className="text-white font-medium">
-                    {new Date(pending.exportedAt).toLocaleDateString("de-DE")}
+                    {new Date(pending.exportedAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'de-DE')}
                   </span>
                 </div>
               )}
@@ -212,13 +216,13 @@ export function ImportExportMenu() {
                 className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white transition-colors"
                 onClick={() => setPending(null)}
               >
-                Abbrechen
+                {t('Abbrechen')}
               </button>
               <button
                 className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
                 onClick={confirmImport}
               >
-                Importieren
+                {t('Importieren')}
               </button>
             </div>
           </div>

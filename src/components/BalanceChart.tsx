@@ -15,13 +15,10 @@ import { useStore } from '../store';
 import { simulateScenario } from '../simulation';
 import { formatMonthShort, formatMonthLong, addMonths, monthsBetween } from '../utils/months';
 import type { Scenario } from '../types';
+import { useT, formatEurLocalized, getLang } from '../utils/i18n';
 
 interface Props {
   overlayScenarioIds: string[];
-}
-
-function formatEur(n: number): string {
-  return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 }
 
 function buildChartData(
@@ -90,9 +87,12 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
   const situations = useStore((s) => s.situations);
   const scenarios = useStore((s) => s.scenarios);
   const activeScenarioId = useStore((s) => s.activeScenarioId);
+  const t = useT();
 
   const activeScenario = scenarios.find((s) => s.id === activeScenarioId);
   if (!activeScenario) return null;
+
+  const lang = getLang();
 
   const overlayScenarios = overlayScenarioIds
     .filter((id) => id !== activeScenarioId)
@@ -107,7 +107,7 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
 
   const negativeFloor = Math.min(0, minBalance - padding);
 
-  // Zusammenhängende Phasen mit recurringNet >= 0 (nachhaltig)
+  // Consecutive phases with recurringNet >= 0 (sustainable)
   const sustainableRanges: { x1: string; x2: string }[] = [];
   {
     const key = `${activeScenarioId}__recurringNet`;
@@ -126,7 +126,7 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
     }
   }
 
-  // Sensitivitätsband: sichtbar wenn balanceMin !== balanceMax irgendwo
+  // Sensitivity band: visible when balanceMin !== balanceMax somewhere
   const hasVariance = chartData.some((row) => {
     const lo = row[`${activeScenarioId}__balanceMin`];
     const hi = row[`${activeScenarioId}__balanceMax`];
@@ -136,7 +136,7 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
   if (chartData.length === 0) {
     return (
       <div className="flex items-center justify-center h-48 text-slate-600 text-sm">
-        Keine Daten zur Anzeige.
+        {t('Keine Daten zur Anzeige.')}
       </div>
     );
   }
@@ -158,12 +158,12 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
 
     return (
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 shadow-2xl text-xs space-y-2 min-w-[220px]">
-        <div className="text-slate-300 font-semibold text-sm">{formatMonthLong(label)}</div>
+        <div className="text-slate-300 font-semibold text-sm">{formatMonthLong(label, lang)}</div>
 
         {row && typeof row.__actual === 'number' && (
           <div className="flex justify-between gap-4 border-b border-slate-700 pb-1">
-            <span className="text-cyan-300">IST Tagesgeld</span>
-            <span className="text-cyan-300 font-semibold">{formatEur(row.__actual)}</span>
+            <span className="text-cyan-300">{t('IST Tagesgeld')}</span>
+            <span className="text-cyan-300 font-semibold">{formatEurLocalized(row.__actual)}</span>
           </div>
         )}
 
@@ -179,33 +179,33 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
               </div>
               <div className="pl-3.5 space-y-0.5">
                 <div className="flex justify-between gap-4">
-                  <span className="text-slate-400">Kontostand</span>
+                  <span className="text-slate-400">{t('Kontostand')}</span>
                   <span className={`font-semibold ${entry.value >= 0 ? 'text-white' : 'text-red-400'}`}>
-                    {formatEur(entry.value)}
+                    {formatEurLocalized(entry.value)}
                   </span>
                 </div>
                 {entry.value < 0 && (
-                  <div className="text-red-300 text-[11px] font-medium">Kritischer Bereich: unter 0 EUR</div>
+                  <div className="text-red-300 text-[11px] font-medium">{t('Kritischer Bereich: unter 0 EUR')}</div>
                 )}
                 {isActive && row && (
                   <>
                     <div className="flex justify-between gap-4">
-                      <span className="text-green-400">Einnahmen</span>
-                      <span className="text-green-400">{formatEur(row[`${sc.id}__income`] as number)}</span>
+                      <span className="text-green-400">{t('Einnahmen')}</span>
+                      <span className="text-green-400">{formatEurLocalized(row[`${sc.id}__income`] as number)}</span>
                     </div>
                     <div className="flex justify-between gap-4">
-                      <span className="text-red-400">Ausgaben</span>
-                      <span className="text-red-400">{formatEur(row[`${sc.id}__expenses`] as number)}</span>
+                      <span className="text-red-400">{t('Ausgaben')}</span>
+                      <span className="text-red-400">{formatEurLocalized(row[`${sc.id}__expenses`] as number)}</span>
                     </div>
                     <div className="flex justify-between gap-4 border-t border-slate-700 pt-0.5">
-                      <span className="text-slate-300">Tagesgeld-Transfer</span>
+                      <span className="text-slate-300">{t('Tagesgeld-Transfer')}</span>
                       {(() => {
                         const net = row[`${sc.id}__net`] as number;
                         const positive = net >= 0;
                         return (
                           <span className={positive ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>
                             {positive ? '↗ + ' : '↘ - '}
-                            {formatEur(Math.abs(net))}
+                            {formatEurLocalized(Math.abs(net))}
                           </span>
                         );
                       })()}
@@ -215,9 +215,9 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
                       const ok = rn >= 0;
                       return (
                         <div className="flex justify-between gap-4">
-                          <span className="text-slate-400">Nachhaltig</span>
+                          <span className="text-slate-400">{t('Nachhaltig')}</span>
                           <span className={ok ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>
-                            {ok ? 'Ja' : 'Nein'} ({ok ? '+' : ''}{formatEur(rn)})
+                            {ok ? t('Ja') : t('Nein')} ({ok ? '+' : ''}{formatEurLocalized(rn)})
                           </span>
                         </div>
                       );
@@ -239,23 +239,23 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
     <div className="w-full h-full relative">
       <div className="absolute right-2 top-1 z-10 pointer-events-none flex flex-col items-end gap-1">
         <span className="text-[11px] px-2 py-1 rounded-md bg-red-950/80 border border-red-500/60 text-red-200">
-          Kritischer Bereich: Kontostand unter 0 EUR
+          {t('Kritischer Bereich: Kontostand unter 0 EUR')}
         </span>
         <span className="text-[11px] px-2 py-1 rounded-md bg-green-950/80 border border-green-500/60 text-green-200">
-          Grün = nachhaltig (ohne Einmal-Ereignisse)
+          {t('Grün = nachhaltig (ohne Einmal-Ereignisse)')}
         </span>
         {typeof activeScenario.goalBalance === 'number' && (
           <span className="text-[11px] px-2 py-1 rounded-md bg-amber-950/80 border border-amber-500/60 text-amber-200">
-            Amber = Zielkontostand
+            {t('Amber = Zielkontostand')}
           </span>
         )}
         {hasVariance && (
           <span className="text-[11px] px-2 py-1 rounded-md bg-slate-900/90 border border-slate-600 text-slate-400">
-            Gestrichelt = Sensitivitätsband
+            {t('Gestrichelt = Sensitivitätsband')}
           </span>
         )}
         <span className="text-[11px] px-2 py-1 rounded-md bg-slate-900/90 border border-slate-700 text-slate-300">
-          Balken = Monats-Transfer Tagesgeld
+          {t('Balken = Monats-Transfer Tagesgeld')}
         </span>
       </div>
       <ResponsiveContainer width="100%" height="100%">
@@ -263,7 +263,7 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
           <XAxis
             dataKey="month"
-            tickFormatter={formatMonthShort}
+            tickFormatter={(m) => formatMonthShort(m, lang)}
             tick={{ fill: '#64748b', fontSize: 11 }}
             axisLine={{ stroke: '#1e293b' }}
             tickLine={false}
@@ -316,7 +316,7 @@ export function BalanceChart({ overlayScenarioIds }: Props) {
               stroke="#f59e0b"
               strokeDasharray="6 4"
               strokeWidth={1.5}
-              label={{ value: `Ziel: ${formatEur(activeScenario.goalBalance)}`, position: 'insideTopRight', fontSize: 10, fill: '#f59e0b' }}
+              label={{ value: t('Ziel: {amount}', { amount: formatEurLocalized(activeScenario.goalBalance) }), position: 'insideTopRight', fontSize: 10, fill: '#f59e0b' }}
             />
           )}
           {(activeScenario.annotations ?? []).map((ann) => (

@@ -1,26 +1,33 @@
 import { useEffect, useState } from 'react';
 import { getAuditEntries, clearAuditLog, type AuditEntry } from '../utils/auditLog';
+import { useT, getLang } from '../utils/i18n';
 
-function formatTimestamp(iso: string): string {
+function formatTimestamp(
+  iso: string,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  lang: string,
+): string {
   const date = new Date(iso);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
 
-  if (diffMin < 1) return 'gerade eben';
-  if (diffMin < 60) return `vor ${diffMin} Min.`;
+  if (diffMin < 1) return t('gerade eben');
+  if (diffMin < 60) return t('vor {diffMin} Min.', { diffMin });
 
-  const time = date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-  if (now.toDateString() === date.toDateString()) return `heute ${time}`;
+  const locale = lang === 'en' ? 'en-US' : 'de-DE';
+  const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  if (now.toDateString() === date.toDateString()) return t('heute {time}', { time });
 
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (yesterday.toDateString() === date.toDateString()) return `gestern ${time}`;
+  if (yesterday.toDateString() === date.toDateString()) return t('gestern {time}', { time });
 
-  const day = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+  const day = date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
   return `${day} ${time}`;
 }
 
+// Icon/color detection depends on German keywords stored in audit log entries — keep as-is
 function entryIcon(label: string): string {
   if (label.includes('hinzugefügt')) return '＋';
   if (label.includes('gelöscht')) return '✕';
@@ -45,6 +52,7 @@ interface Props {
 
 export function AuditLogPanel({ onClose }: Props) {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const t = useT();
 
   useEffect(() => {
     setEntries(getAuditEntries());
@@ -54,6 +62,8 @@ export function AuditLogPanel({ onClose }: Props) {
     clearAuditLog();
     setEntries([]);
   };
+
+  const lang = getLang();
 
   return (
     <div
@@ -68,8 +78,8 @@ export function AuditLogPanel({ onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 shrink-0">
           <div>
-            <h2 className="text-sm font-semibold text-white">Änderungsprotokoll</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Letzte 7 Tage · {entries.length} Einträge</p>
+            <h2 className="text-sm font-semibold text-white">{t('Änderungsprotokoll')}</h2>
+            <p className="text-xs text-slate-500 mt-0.5">{t('Letzte 7 Tage · {count} Einträge', { count: entries.length })}</p>
           </div>
           <div className="flex items-center gap-2">
             {entries.length > 0 && (
@@ -77,7 +87,7 @@ export function AuditLogPanel({ onClose }: Props) {
                 className="text-xs text-slate-400 hover:text-rose-400 px-2 py-1 rounded transition-colors"
                 onClick={handleClear}
               >
-                Leeren
+                {t('Leeren')}
               </button>
             )}
             <button
@@ -94,9 +104,9 @@ export function AuditLogPanel({ onClose }: Props) {
           {entries.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-slate-500">
               <span className="text-3xl mb-3">📋</span>
-              <p className="text-sm">Noch keine Änderungen protokolliert.</p>
+              <p className="text-sm">{t('Noch keine Änderungen protokolliert.')}</p>
               <p className="text-xs mt-1 text-slate-600">
-                Änderungen werden ab jetzt aufgezeichnet.
+                {t('Änderungen werden ab jetzt aufgezeichnet.')}
               </p>
             </div>
           ) : (
@@ -113,7 +123,7 @@ export function AuditLogPanel({ onClose }: Props) {
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-sm text-slate-200 leading-snug">{entry.label}</span>
                         <span className="text-xs text-slate-500 whitespace-nowrap shrink-0 mt-0.5">
-                          {formatTimestamp(entry.timestamp)}
+                          {formatTimestamp(entry.timestamp, t, lang)}
                         </span>
                       </div>
                       {entry.detail && (

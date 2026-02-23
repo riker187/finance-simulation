@@ -27,17 +27,22 @@ export function monthsBetween(start: string, end: string): string[] {
   return result;
 }
 
+const MONTH_SHORT_DE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+const MONTH_SHORT_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_LONG_DE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+const MONTH_LONG_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
 /** Format 'YYYY-MM' to short display like 'Jan 25' */
-export function formatMonthShort(month: string): string {
+export function formatMonthShort(month: string, lang = 'de'): string {
   const [year, m] = month.split('-').map(Number);
-  const names = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+  const names = lang === 'en' ? MONTH_SHORT_EN : MONTH_SHORT_DE;
   return `${names[m - 1]} ${String(year).slice(2)}`;
 }
 
 /** Format 'YYYY-MM' to long display like 'Januar 2025' */
-export function formatMonthLong(month: string): string {
+export function formatMonthLong(month: string, lang = 'de'): string {
   const [year, m] = month.split('-').map(Number);
-  const names = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  const names = lang === 'en' ? MONTH_LONG_EN : MONTH_LONG_DE;
   return `${names[m - 1]} ${year}`;
 }
 

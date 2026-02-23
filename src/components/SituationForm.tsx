@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import type { Situation, FinancialEffect, EffectType, EffectCategory } from '../types';
 import { SITUATION_COLORS, DEFAULT_SITUATION_CATEGORY, SITUATION_CATEGORY_SUGGESTIONS } from '../types';
 import { uid } from '../utils/uid';
+import { useT } from '../utils/i18n';
 
 interface Props {
   initial?: Situation;
@@ -23,6 +24,7 @@ function emptyEffect(base?: Pick<FinancialEffect, 'type' | 'category'>): Financi
 export function SituationForm({ initial, onSave, onCancel }: Props) {
   const situations = useStore((s) => s.situations);
   const scenarios = useStore((s) => s.scenarios);
+  const t = useT();
 
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
@@ -98,6 +100,7 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
       .filter((e) => e.amount > 0)
       .map((e) => ({
         ...e,
+        // Default labels stored in German (stored data stays German per plan)
         label: e.label.trim() || (e.category === 'income' ? 'Einnahme' : 'Ausgabe'),
       }));
     onSave({
@@ -114,42 +117,46 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-lg rounded-2xl bg-slate-800 border border-slate-700 shadow-2xl p-6 space-y-5">
         <h2 className="text-lg font-semibold text-white">
-          {initial ? 'Situation bearbeiten' : 'Neue Situation'}
+          {initial ? t('Situation bearbeiten') : t('Neue Situation')}
         </h2>
 
         {initial && affectsMultipleScenarios && (
           <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-            Achtung: Diese Situation wird in {usageScenarioNames.length} Szenarien verwendet ({usageScenarioNames.join(', ')}).
-            Aenderungen wirken sich in allen betroffenen Szenarien aus.
+            {t('Achtung: Diese Situation wird in {count} Szenarien verwendet ({names}).', {
+              count: usageScenarioNames.length,
+              names: usageScenarioNames.join(', '),
+            })}
+            {' '}
+            {t('Änderungen wirken sich in allen betroffenen Szenarien aus.')}
           </div>
         )}
 
         {/* Name */}
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Name</label>
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">{t('Name')}</label>
           <input
             className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="z.B. Vollzeitjob"
+            placeholder={t('z.B. Vollzeitjob')}
             autoFocus
           />
         </div>
 
         {/* Description */}
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Beschreibung (optional)</label>
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">{t('Beschreibung (optional)')}</label>
           <input
             className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Kurze Beschreibung"
+            placeholder={t('Kurze Beschreibung')}
           />
         </div>
 
         {/* Category */}
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Kategorie</label>
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">{t('Kategorie')}</label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <select
               className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
@@ -158,9 +165,9 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
                 if (e.target.value) setCategory(e.target.value);
               }}
             >
-              <option value="">Vorhandene Kategorie wählen...</option>
+              <option value="">{t('Vorhandene Kategorie wählen...')}</option>
               {existingCategories.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c}>{t(c)}</option>
               ))}
             </select>
 
@@ -169,7 +176,7 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
               className="w-full rounded-lg bg-slate-900 border border-slate-700 px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              placeholder="Oder neue Kategorie eingeben"
+              placeholder={t('Oder neue Kategorie eingeben')}
             />
           </div>
           <datalist id="situation-categories">
@@ -181,7 +188,7 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
 
         {/* Color */}
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Farbe</label>
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">{t('Farbe')}</label>
           <div className="flex gap-2 flex-wrap">
             {SITUATION_COLORS.map((c) => (
               <button
@@ -198,28 +205,28 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
 
         {/* Effects */}
         <div className="space-y-2">
-          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">Finanzielle Auswirkungen</label>
+          <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">{t('Finanzielle Auswirkungen')}</label>
           <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
             {effects.map((effect) => {
               const dir = effect.varianceDirection ?? '±';
               const hasVariance = (effect.variancePercent ?? 0) > 0;
               return (
                 <div key={effect.id} className="rounded-lg bg-slate-900 border border-slate-700 overflow-hidden">
-                  {/* Zeile 1: Bezeichnung + Typ + Kategorie + Löschen */}
+                  {/* Row 1: Label + type + category + delete */}
                   <div className="flex gap-2 items-center px-2 pt-2 pb-1">
                     <input
                       className="flex-1 min-w-0 bg-transparent text-white text-sm focus:outline-none placeholder-slate-500"
                       value={effect.label}
                       onChange={(e) => updateEffect(effect.id, { label: e.target.value })}
-                      placeholder="Bezeichnung"
+                      placeholder={t('Bezeichnung')}
                     />
                     <select
                       className="bg-slate-800 border border-slate-600 rounded text-xs text-slate-300 px-1 py-1 focus:outline-none shrink-0"
                       value={effect.type}
                       onChange={(e) => updateEffect(effect.id, { type: e.target.value as EffectType })}
                     >
-                      <option value="recurring">monatlich</option>
-                      <option value="one-time">einmalig</option>
+                      <option value="recurring">{t('monatlich')}</option>
+                      <option value="one-time">{t('einmalig')}</option>
                     </select>
                     <select
                       className="bg-slate-800 border border-slate-600 rounded text-xs px-1 py-1 focus:outline-none shrink-0"
@@ -227,8 +234,8 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
                       style={{ color: effect.category === 'income' ? '#22c55e' : '#fb7185' }}
                       onChange={(e) => updateEffect(effect.id, { category: e.target.value as EffectCategory })}
                     >
-                      <option value="income">Einnahme</option>
-                      <option value="expense">Ausgabe</option>
+                      <option value="income">{t('Einnahme')}</option>
+                      <option value="expense">{t('Ausgabe')}</option>
                     </select>
                     <button
                       className="text-slate-600 hover:text-red-400 transition-colors shrink-0"
@@ -237,7 +244,7 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
                       ✕
                     </button>
                   </div>
-                  {/* Zeile 2: Betrag + Varianz */}
+                  {/* Row 2: Amount + variance */}
                   <div className="flex gap-2 items-center px-2 pb-2 pt-0.5 border-t border-slate-800">
                     <input
                       type="number"
@@ -247,9 +254,9 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
                       placeholder="0"
                       min="0"
                     />
-                    <span className="text-slate-500 text-xs shrink-0">EUR</span>
+                    <span className="text-slate-500 text-xs shrink-0">{t('EUR')}</span>
                     <span className="flex-1" />
-                    <span className="text-slate-500 text-xs shrink-0">Streuung</span>
+                    <span className="text-slate-500 text-xs shrink-0">{t('Streuung')}</span>
                     <input
                       type="number"
                       className="w-14 bg-slate-800 border border-slate-700 rounded text-slate-300 text-xs text-right px-1 py-0.5 focus:outline-none"
@@ -258,10 +265,10 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
                         const v = parseFloat(e.target.value);
                         updateEffect(effect.id, { variancePercent: v > 0 ? Math.min(v, 100) : undefined });
                       }}
-                      placeholder="0 %"
+                      placeholder={t('0 %')}
                       min="0"
                       max="100"
-                      title="Streuung in % – für Sensitivitätsband im Chart"
+                      title={t('Streuung in % – für Sensitivitätsband im Chart')}
                     />
                     <div className="flex rounded overflow-hidden border border-slate-700 shrink-0">
                       {(['+', '±', '-'] as const).map((d) => (
@@ -273,7 +280,7 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
                               : 'bg-slate-800 text-slate-500 hover:text-slate-300'
                           }`}
                           onClick={() => updateEffect(effect.id, { varianceDirection: d })}
-                          title={d === '+' ? 'Nur aufwärts' : d === '-' ? 'Nur abwärts' : 'Beide Richtungen'}
+                          title={d === '+' ? t('Nur aufwärts') : d === '-' ? t('Nur abwärts') : t('Beide Richtungen')}
                           disabled={!hasVariance}
                         >
                           {d}
@@ -289,7 +296,7 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
             className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
             onClick={addEffect}
           >
-            + Auswirkung hinzufuegen
+            {t('+ Auswirkung hinzufügen')}
           </button>
         </div>
 
@@ -299,14 +306,14 @@ export function SituationForm({ initial, onSave, onCancel }: Props) {
             className="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white transition-colors"
             onClick={onCancel}
           >
-            Abbrechen
+            {t('Abbrechen')}
           </button>
           <button
             className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors disabled:opacity-40"
             onClick={handleSave}
             disabled={!name.trim()}
           >
-            Speichern
+            {t('Speichern')}
           </button>
         </div>
       </div>
