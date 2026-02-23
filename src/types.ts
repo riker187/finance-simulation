@@ -82,6 +82,33 @@ export interface MonthlyBalance {
   balanceMax: number; // optimistischer Kontostand (Sensitivität)
 }
 
+// ── Monthly breakdown (per-situation detail view) ─────────────────────────────
+
+export interface EffectLine {
+  effectId: string;
+  label: string;
+  amount: number;
+  category: EffectCategory;
+  isOneTime: boolean;
+}
+
+export interface SituationLine {
+  situationId: string;
+  name: string;
+  color: string;
+  effects: EffectLine[];
+  totalIncome: number;
+  totalExpense: number;
+}
+
+export interface MonthBreakdown {
+  month: string;
+  situations: SituationLine[];
+  totalIncome: number;
+  totalExpense: number;
+  net: number;
+}
+
 export const SITUATION_COLORS = [
   '#4f8aff', // blue
   '#22c55e', // green

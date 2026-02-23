@@ -258,6 +258,15 @@ const en: Record<string, string> = {
   'Die aktuellen Daten werden durch den Import überschrieben. Diese Aktion kann nicht rückgängig gemacht werden.': 'The current data will be overwritten by the import. This action cannot be undone.',
   'Exportiert am': 'Exported on',
 
+  // Monthly breakdown view
+  'Monatsansicht': 'Monthly View',
+  'EINNAHMEN': 'INCOME',
+  'AUSGABEN': 'EXPENSES',
+  'Netto': 'Net',
+  'Bilanz:': 'Balance:',
+  'Gesamt': 'Total',
+  'Keine aktiven Situationen in diesem Monat.': 'No active situations in this month.',
+
   // Misc
   'Auswirkung': 'Effect',
 

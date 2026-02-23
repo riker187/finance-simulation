@@ -10,6 +10,7 @@ import { ComparisonChart } from './components/ComparisonChart';
 import { ImportExportMenu } from './components/ImportExportMenu';
 import { AuditLogPanel } from './components/AuditLogPanel';
 import { ProfileSwitcher } from './components/ProfileSwitcher';
+import { MonthlyBreakdown } from './components/MonthlyBreakdown';
 import { useT, getLang, setLang, formatEurLocalized } from './utils/i18n';
 
 const SIDEBAR_MIN_W = 220;
@@ -52,6 +53,7 @@ export function App() {
   const compareMode = useStore((s) => s.compareMode);
   const setCompareMode = useStore((s) => s.setCompareMode);
   const scenarios = useStore((s) => s.scenarios);
+  const situations = useStore((s) => s.situations);
   const activeScenarioId = useStore((s) => s.activeScenarioId);
   const syncStatus = useRealtimeSync();
   const t = useT();
@@ -67,6 +69,11 @@ export function App() {
   );
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [showAuditLog, setShowAuditLog] = useState(false);
+  const [viewMode, setViewMode] = useState<'timeline' | 'monthly'>('timeline');
+
+  useEffect(() => {
+    setViewMode('timeline');
+  }, [activeScenarioId]);
 
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const chartScrollRef = useRef<HTMLDivElement | null>(null);
@@ -323,73 +330,100 @@ export function App() {
             <ScenarioTabs />
             <ScenarioSettings />
 
-            <div className="flex flex-col flex-1 min-h-0">
-              <div
-                ref={timelineScrollRef}
-                onScroll={(e) => syncHorizontalScroll('timeline', e.currentTarget.scrollLeft)}
-                className="overflow-auto border-b border-slate-800 shrink-0"
-                style={{ height: timelineHeight }}
+            {/* View mode toggle */}
+            <div className="flex border-b border-slate-800 px-4 gap-1 py-1.5 shrink-0">
+              <button
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  viewMode === 'timeline'
+                    ? 'bg-slate-700 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+                onClick={() => setViewMode('timeline')}
               >
-                <div className="min-w-0">
-                  <div className="px-4 py-2 flex items-center gap-2 border-b border-slate-800/50">
-                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t('Zeitplan')}</span>
-                  </div>
-                  <TimelineEditor />
-                </div>
+                {t('Zeitplan')}
+              </button>
+              <button
+                className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                  viewMode === 'monthly'
+                    ? 'bg-slate-700 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+                onClick={() => setViewMode('monthly')}
+              >
+                {t('Monatsansicht')}
+              </button>
+            </div>
+
+            {viewMode === 'monthly' && activeScenario ? (
+              <div className="flex-1 min-h-0">
+                <MonthlyBreakdown scenario={activeScenario} situations={situations} />
               </div>
-
-              <div
-                className="h-1.5 shrink-0 cursor-row-resize bg-slate-900 hover:bg-blue-500/60 active:bg-blue-500/80 transition-colors"
-                onMouseDown={startTimelineResize}
-                title={t('Hoehe des Zeitplans anpassen')}
-              />
-
-              <div className="flex-1 min-h-0 flex flex-col">
-                <div className="mb-2 px-4 pt-4 flex items-center gap-3 flex-wrap">
-                  <span className="text-xs font-medium text-slate-500 uppercase tracking-wide shrink-0">
-                    {t('Kontostandverlauf')}
-                  </span>
-                  {otherScenarios.map((sc) => {
-                    const active = cleanOverlayIds.includes(sc.id);
-                    return (
-                      <button
-                        key={sc.id}
-                        onClick={() => toggleOverlay(sc.id)}
-                        className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs border transition-colors"
-                        style={
-                          active
-                            ? {
-                                borderColor: sc.color + 'aa',
-                                backgroundColor: sc.color + '22',
-                                color: 'white',
-                              }
-                            : { borderColor: '#334155', color: '#64748b' }
-                        }
-                        title={active ? t('{name} ausblenden', { name: sc.name }) : t('{name} einblenden', { name: sc.name })}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full shrink-0"
-                          style={{ backgroundColor: sc.color, opacity: active ? 1 : 0.5 }}
-                        />
-                        {sc.name}
-                      </button>
-                    );
-                  })}
+            ) : (
+              <div className="flex flex-col flex-1 min-h-0">
+                <div
+                  ref={timelineScrollRef}
+                  onScroll={(e) => syncHorizontalScroll('timeline', e.currentTarget.scrollLeft)}
+                  className="overflow-auto border-b border-slate-800 shrink-0"
+                  style={{ height: timelineHeight }}
+                >
+                  <div className="min-w-0">
+                    <TimelineEditor />
+                  </div>
                 </div>
 
                 <div
-                  ref={chartScrollRef}
-                  onScroll={(e) => syncHorizontalScroll('chart', e.currentTarget.scrollLeft)}
-                  className="flex-1 min-h-0 overflow-x-auto pb-4"
-                >
-                  <div style={{ width: timelineContentWidth, height: '100%' }}>
-                    <div style={{ width: chartPlotWidth, height: '100%', marginLeft: TIMELINE_LABEL_W }}>
-                      <BalanceChart overlayScenarioIds={cleanOverlayIds} />
+                  className="h-1.5 shrink-0 cursor-row-resize bg-slate-900 hover:bg-blue-500/60 active:bg-blue-500/80 transition-colors"
+                  onMouseDown={startTimelineResize}
+                  title={t('Hoehe des Zeitplans anpassen')}
+                />
+
+                <div className="flex-1 min-h-0 flex flex-col">
+                  <div className="mb-2 px-4 pt-4 flex items-center gap-3 flex-wrap">
+                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide shrink-0">
+                      {t('Kontostandverlauf')}
+                    </span>
+                    {otherScenarios.map((sc) => {
+                      const active = cleanOverlayIds.includes(sc.id);
+                      return (
+                        <button
+                          key={sc.id}
+                          onClick={() => toggleOverlay(sc.id)}
+                          className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs border transition-colors"
+                          style={
+                            active
+                              ? {
+                                  borderColor: sc.color + 'aa',
+                                  backgroundColor: sc.color + '22',
+                                  color: 'white',
+                                }
+                              : { borderColor: '#334155', color: '#64748b' }
+                          }
+                          title={active ? t('{name} ausblenden', { name: sc.name }) : t('{name} einblenden', { name: sc.name })}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ backgroundColor: sc.color, opacity: active ? 1 : 0.5 }}
+                          />
+                          {sc.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div
+                    ref={chartScrollRef}
+                    onScroll={(e) => syncHorizontalScroll('chart', e.currentTarget.scrollLeft)}
+                    className="flex-1 min-h-0 overflow-x-auto pb-4"
+                  >
+                    <div style={{ width: timelineContentWidth, height: '100%' }}>
+                      <div style={{ width: chartPlotWidth, height: '100%', marginLeft: TIMELINE_LABEL_W }}>
+                        <BalanceChart overlayScenarioIds={cleanOverlayIds} />
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
